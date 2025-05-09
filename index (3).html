@@ -1,0 +1,597 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piano Virtual</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f4f7fa;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+      width: 100%;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+    header i {
+      font-size: 2rem;
+      color: #e67e22;
+    }
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+    .piano {
+      display: flex;
+      flex-direction: row;
+      background-color: #fff;
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+      margin-top: 20px;
+    }
+    .key {
+      width: 40px;
+      height: 200px;
+      border: 1px solid #ccc;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 10px;
+      font-size: 12px;
+      color: #333;
+      transition: transform 0.1s ease, background 0.2s ease;
+      box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .white {
+      background: linear-gradient(#fff, #e8ecef);
+      z-index: 1;
+    }
+    .black {
+      background: linear-gradient(#2d3436, #000);
+      color: #fff;
+      width: 24px;
+      height: 120px;
+      margin: 0 -12px;
+      z-index: 2;
+    }
+    .key:active, .key.playing {
+      background: linear-gradient(#74c0fc, #4dabf7);
+      transform: scale(0.97);
+    }
+    .black.playing {
+      background: linear-gradient(#1864ab, #0a4275);
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+    }
+    .sustain-btn {
+      background: linear-gradient(135deg, #339af0, #1e90ff);
+      margin: 10px;
+    }
+    .sustain-btn:hover {
+      background: linear-gradient(135deg, #228be6, #1971d2);
+    }
+    .sustain-btn.active {
+      background: linear-gradient(135deg, #2ecc71, #26ad5f);
+    }
+    .key-map-btn {
+      background: linear-gradient(135deg, #868e96, #6c757d);
+      margin: 10px;
+    }
+    .key-map-btn:hover {
+      background: linear-gradient(135deg, #6c757d, #495057);
+    }
+    .harmonic-field-btn {
+      background: linear-gradient(135deg, #f76707, #e8590c);
+    }
+    .harmonic-field-btn:hover {
+      background: linear-gradient(135deg, #e8590c, #c0392b);
+    }
+    .harmonic-field-btn.active {
+      background: linear-gradient(135deg, #c0392b, #9b1d1d);
+    }
+    .chord-btn {
+      background: linear-gradient(135deg, #20c997, #12b886);
+    }
+    .chord-btn:hover {
+      background: linear-gradient(135deg, #12b886, #099268);
+    }
+    #chords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      justify-content: center;
+    }
+    footer {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: #fff;
+      padding: 15px;
+      text-align: center;
+      width: 100%;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    footer i {
+      color: #e67e22;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 600px;
+      width: 90%;
+      position: relative;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    .modal-content h2 {
+      font-size: 1.8rem;
+      color: #2c3e50;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .close-btn {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      font-size: 28px;
+      cursor: pointer;
+      color: #333;
+      transition: color 0.2s;
+    }
+    .close-btn:hover {
+      color: #e67e22;
+    }
+    .key-map {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .key-map div {
+      padding: 12px;
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    .key-map div:nth-child(odd) {
+      background-color: #e9ecef;
+    }
+    @media (max-width: 768px) {
+      .key {
+        width: 30px;
+        height: 150px;
+        font-size: 10px;
+      }
+      .black {
+        width: 18px;
+        height: 90px;
+        margin: 0 -9px;
+      }
+      button {
+        padding: 10px 18px;
+        font-size: 14px;
+      }
+      header h1 {
+        font-size: 1.8rem;
+      }
+      header i {
+        font-size: 1.5rem;
+      }
+      .modal-content h2 {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <i class="fas fa-piano"></i>
+    <h1>Piano Virtual Interativo</h1>
+  </header>
+  <div class="container">
+    <div>
+      <button id="sustainBtn" class="sustain-btn"><i class="fas fa-wave-square"></i> Ativar Sustain</button>
+      <button id="keyMapBtn" class="key-map-btn"><i class="fas fa-keyboard"></i> Mapa de Teclas</button>
+    </div>
+    <div class="controls" id="harmonicFields"></div>
+    <div id="chords"></div>
+    <div class="piano" id="piano"></div>
+  </div>
+  <footer>
+    <i class="fas fa-music"></i>
+    <p>Piano Virtual © 2025 - Desenvolvido com Tone.js</p>
+  </footer>
+
+  <div id="keyMapModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn">×</span>
+      <h2><i class="fas fa-keyboard"></i> Mapa de Teclas</h2>
+      <div class="key-map">
+        <div><strong>Z</strong> - C3</div>
+        <div><strong>S</strong> - C#3</div>
+        <div><strong>X</strong> - D3</div>
+        <div><strong>D</strong> - D#3</div>
+        <div><strong>C</strong> - E3</div>
+        <div><strong>V</strong> - F3</div>
+        <div><strong>G</strong> - F#3</div>
+        <div><strong>B</strong> - G3</div>
+        <div><strong>H</strong> - G#3</div>
+        <div><strong>N</strong> - A3</div>
+        <div><strong>J</strong> - A#3</div>
+        <div><strong>M</strong> - B3</div>
+        <div><strong>Q</strong> - C4</div>
+        <div><strong>2</strong> - C#4</div>
+        <div><strong>W</strong> - D4</div>
+        <div><strong>3</strong> - D#4</div>
+        <div><strong>E</strong> - E4</div>
+        <div><strong>R</strong> - F4</div>
+        <div><strong>5</strong> - F#4</div>
+        <div><strong>T</strong> - G4</div>
+        <div><strong>6</strong> - G#4</div>
+        <div><strong>Y</strong> - A4</div>
+        <div><strong>7</strong> - A#4</div>
+        <div><strong>U</strong> - B4</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <script>
+    const sampler = new Tone.Sampler({
+      urls: {
+        "A0": "A0.mp3",
+        "C1": "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        "A1": "A1.mp3",
+        "C2": "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        "A2": "A2.mp3",
+        "C3": "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        "A3": "A3.mp3",
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+        "C5": "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        "A5": "A5.mp3",
+        "C6": "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        "A6": "A6.mp3",
+        "C7": "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        "A7": "A7.mp3",
+        "C8": "C8.mp3"
+      },
+      release: 1,
+      baseUrl: "https://tonejs.github.io/audio/salamander/"
+    }).toDestination();
+
+    const notes = [
+      'C3', 'C#3', 'D3', 'D#3', 'E3', 'F3', 'F#3', 'G3', 'G#3', 'A3', 'A#3', 'B3',
+      'C4', 'C#4', 'D4', 'D#4', 'E4', 'F4', 'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4',
+      'C5', 'C#5', 'D5', 'D#5', 'E5', 'F5', 'F#5', 'G5', 'G#5', 'A5', 'A#5', 'B5'
+    ];
+
+    const blackKeys = ['C#', 'D#', 'F#', 'G#', 'A#'];
+
+    let sustain = false;
+    const sustainBtn = document.getElementById('sustainBtn');
+    sustainBtn.addEventListener('click', () => {
+      sustain = !sustain;
+      sustainBtn.innerHTML = sustain 
+        ? '<i class="fas fa-wave-square"></i> Desativar Sustain' 
+        : '<i class="fas fa-wave-square"></i> Ativar Sustain';
+      sustainBtn.classList.toggle('active', sustain);
+      if (!sustain) {
+        sustainedNotes.forEach(note => sampler.triggerRelease(note));
+        sustainedNotes = [];
+      }
+    });
+
+    const piano = document.getElementById('piano');
+    notes.forEach(note => {
+      const key = document.createElement('div');
+      key.classList.add('key');
+      const isBlack = blackKeys.some(black => note.includes(black));
+      key.classList.add(isBlack ? 'black' : 'white');
+      key.dataset.note = note;
+      key.textContent = note;
+      piano.appendChild(key);
+
+      key.addEventListener('click', async () => {
+        if (Tone.context.state !== 'running') {
+          await Tone.start();
+        }
+        const duration = sustain ? '2n' : '8n';
+        sampler.triggerAttackRelease(note, duration);
+        highlightKey(key);
+      });
+    });
+
+    function highlightKey(key) {
+      key.classList.add('playing');
+      setTimeout(() => key.classList.remove('playing'), 200);
+    }
+
+    const keyToNote = {
+      'z': 'C3', 's': 'C#3', 'x': 'D3', 'd': 'D#3', 'c': 'E3', 'v': 'F3', 'g': 'F#3', 'b': 'G3', 'h': 'G#3', 'n': 'A3', 'j': 'A#3', 'm': 'B3',
+      'q': 'C4', '2': 'C#4', 'w': 'D4', '3': 'D#4', 'e': 'E4', 'r': 'F4', '5': 'F#4', 't': 'G4', '6': 'G#4', 'y': 'A4', '7': 'A#4', 'u': 'B4'
+    };
+
+    let pressedKeys = new Set();
+    let sustainedNotes = [];
+
+    document.addEventListener('keydown', async (event) => {
+      const key = event.key.toLowerCase();
+      if (keyToNote[key] && !pressedKeys.has(key)) {
+        pressedKeys.add(key);
+        const note = keyToNote[key];
+        if (Tone.context.state !== 'running') {
+          await Tone.start();
+        }
+        sampler.triggerAttack(note);
+        if (sustain) {
+          sustainedNotes.push(note);
+        }
+        const keyElement = document.querySelector(`.key[data-note="${note}"]`);
+        if (keyElement) highlightKey(keyElement);
+      }
+    });
+
+    document.addEventListener('keyup', (event) => {
+      const key = event.key.toLowerCase();
+      if (keyToNote[key] && pressedKeys.has(key)) {
+        pressedKeys.delete(key);
+        const note = keyToNote[key];
+        if (!sustain) {
+          sampler.triggerRelease(note);
+        }
+      }
+    });
+
+    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const majorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const minorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+    function getMajorScale(root) {
+      const scaleIntervals = [0, 2, 4, 5, 7, 9, 11];
+      const rootIndex = chromaticNotes.indexOf(root);
+      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
+    }
+
+    function getMinorScale(root) {
+      const scaleIntervals = [0, 2, 3, 5, 7, 8, 10];
+      const rootIndex = chromaticNotes.indexOf(root);
+      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
+    }
+
+    function getChords(scale, isMinor = false) {
+      const chordTypes = isMinor
+        ? ['m', 'dim', '', 'm', 'm', '', '']
+        : ['', 'm', 'm', '', '', 'm', 'dim'];
+      return scale.map((note, i) => {
+        const chordRoot = note;
+        const third = scale[(i + 2) % 7];
+        const fifth = scale[(i + 4) % 7];
+        const chordType = chordTypes[i];
+        const chordName = chordType === 'm' ? chordRoot + 'm' : chordType === 'dim' ? chordRoot + 'dim' : chordRoot;
+        return {
+          name: chordName,
+          notes: [chordRoot + '4', third + '4', fifth + '4']
+        };
+      });
+    }
+
+    const harmonicFields = {};
+    majorKeys.forEach(root => {
+      const majorScale = getMajorScale(root);
+      const majorChords = getChords(majorScale);
+      harmonicFields[`${root} Maior`] = {
+        chords: majorChords.map(chord => chord.name),
+        notes: majorChords.reduce((acc, chord) => {
+          acc[chord.name] = chord.notes;
+          return acc;
+        }, {})
+      };
+    });
+
+    minorKeys.forEach(root => {
+      const minorScale = getMinorScale(root);
+      const minorChords = getChords(minorScale, true);
+      harmonicFields[`${root} Menor`] = {
+        chords: minorChords.map(chord => chord.name),
+        notes: minorChords.reduce((acc, chord) => {
+          acc[chord.name] = chord.notes;
+          return acc;
+        }, {})
+      };
+    });
+
+    const harmonicFieldsContainer = document.getElementById('harmonicFields');
+    const chordsContainer = document.getElementById('chords');
+    let activeField = null;
+
+    Object.keys(harmonicFields).forEach(field => {
+      const btn = document.createElement('button');
+      btn.classList.add('harmonic-field-btn');
+      btn.innerHTML = `<i class="fas fa-guitar"></i> ${field}`;
+      btn.addEventListener('click', () => {
+        if (activeField === field) return;
+        activeField = field;
+        document.querySelectorAll('.harmonic-field-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        displayChords(field);
+      });
+      harmonicFieldsContainer.appendChild(btn);
+    });
+
+    function displayChords(field) {
+      chordsContainer.innerHTML = '';
+      const fieldData = harmonicFields[field];
+      fieldData.chords.forEach(chord => {
+        const btn = document.createElement('button');
+        btn.classList.add('chord-btn');
+        btn.innerHTML = `<i class="fas fa-music"></i> ${chord}`;
+        btn.addEventListener('click', async () => {
+          if (Tone.context.state !== 'running') {
+            await Tone.start();
+          }
+          const notes = fieldData.notes[chord];
+          const duration = sustain ? '2n' : '8n';
+          sampler.triggerAttackRelease(notes, duration);
+          notes.forEach(note => {
+            const key = document.querySelector(`.key[data-note="${note}"]`);
+            if (key) highlightKey(key);
+          });
+        });
+        chordsContainer.appendChild(btn);
+      });
+    }
+
+    const keyMapBtn = document.getElementById('keyMapBtn');
+    const keyMapModal = document.getElementById('keyMapModal');
+    const closeBtn = document.querySelector('.close-btn');
+
+    keyMapBtn.addEventListener('click', () => {
+      keyMapModal.style.display = 'flex';
+    });
+
+    closeBtn.addEventListener('click', () => {
+      keyMapModal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (event) => {
+      if (event.target === keyMapModal) {
+        keyMapModal.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
