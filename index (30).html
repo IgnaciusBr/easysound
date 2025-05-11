@@ -1,0 +1,261 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detector de Notas Musicais</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        #note {
+            font-size: 2em;
+            margin: 20px;
+            color: #333;
+        }
+        #toggleButton {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #toggleButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #toggleButton:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        #error {
+            color: red;
+            margin-top: 10px;
+            max-width: 80%;
+            text-align: center;
+        }
+        .modal {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+        }
+        .modal-content button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 10px;
+        }
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+        .modal-content #modalError {
+            color: red;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        #noteLog, #filteredNotes {
+            margin-top: 20px;
+            max-width: 80%;
+            text-align: left;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #noteLog h3, #filteredNotes h3 {
+            margin-top: 0;
+        }
+        #noteLog ul, #filteredNotes ul {
+            list-style: none;
+            padding: 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #noteLog li, #filteredNotes li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Detector de Notas Musicais</h1>
+    <div id="note">Cante uma nota!</div>
+    <button id="toggleButton" disabled>Iniciar Detecção</button>
+    <div id="error"></div>
+    <div id="noteLog">
+        <h3>Registro de Notas</h3>
+        <ul id="noteLogList"></ul>
+    </div>
+    <div id="filteredNotes">
+        <h3>Sequência Filtrada</h3>
+        <ul id="filteredNotesList"></ul>
+    </div>
+
+    <div id="permissionModal" class="modal">
+        <div class="modal-content">
+            <h2>Permissão de Microfone</h2>
+            <p>Precisamos acessar seu microfone para detectar as notas que você cantarola. Clique abaixo para permitir.</p>
+            <button id="allowMicButton">Permitir Microfone</button>
+            <button id="retryButton" style="display: none;">Tentar Novamente</button>
+            <div id="modalError"></div>
+        </div>
+    </div>
+
+    <script>
+        const noteDisplay = document.getElementById('note');
+        const toggleButton = document.getElementById('toggleButton');
+        const errorDisplay = document.getElementById('error');
+        const permissionModal = document.getElementById('permissionModal');
+        const allowMicButton = document.getElementById('allowMicButton');
+        const retryButton = document.getElementById('retryButton');
+        const modalError = document.getElementById('modalError');
+        const noteLogList = document.getElementById('noteLogList');
+        const filteredNotesList = document.getElementById('filteredNotesList');
+
+        const noteFrequencies = {
+            'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
+            'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
+            'A#': 466.16, 'B': 493.88
+        };
+
+        let noteLog = [];
+        let isDetecting = false;
+        let audioContext = null;
+        let analyser = null;
+        let source = null;
+        let animationFrameId = null;
+
+        function frequencyToNote(frequency) {
+            if (!frequency || frequency < 100 || frequency > 1000) return 'Nenhuma nota detectada';
+            
+            const A4 = 440;
+            const semitone = Math.pow(2, 1/12);
+            const noteNumber = 12 * Math.log2(frequency / A4);
+            const noteIndex = Math.round(noteNumber) % 12;
+            const octave = Math.floor((noteNumber + 9) / 12) + 4;
+
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 更新されたコードでは、以下の変更が加えられました：
+
+1. **ノートログの記録**:
+   - `noteLog` 配列に `{ note, timestamp }` の形式で検出されたノートを保存します。
+   - 生のログを `<ul id="noteLogList">` に表示します。
+
+2. **検出の一時停止/再開**:
+   - `toggleButton` で検出を一時停止/再開できるようにしました。
+   - `isDetecting` フラグで検出状態を管理し、分析を停止/再開しますが、オーディオストリームは維持されます。
+
+3. **ノートのフィルタリング**:
+   - `filterNotes` 関数で連続する重複ノートを削除します（例: "C4, C4, C4" → "C4"）。
+   - フィルタリングされたシーケンスを `<ul id="filteredNotesList">` に表示します。
+
+4. **インターフェース**:
+   - ログとフィルタリングされたシーケンスを表示するセクションを追加。
+   - スクロール可能なリストとシャドウ効果で視認性を向上。
+
+### テスト方法：
+1. **コードを保存**:
+   - 上記のコードを `index.html` に保存します。
+
+2. **HTTPS環境で実行**:
+   - 前回機能した環境（例: Replit）を再利用してください。
+   - Replitの場合:
+     - 新しいHTMLプロジェクトを作成。
+     - コードを `index.html` に貼り付け。
+     - 「Run」をクリックしてHTTPSリンクを開く。
+   - または、CodePen/JSFiddleでHTML/CSS/JSを対応するパネルに貼り付け。
+
+3. **マイクを許可**:
+   - ページを開くとモーダルが表示されます。「マイクを許可」をクリックし、ブラウザのプロンプトで「許可」を選択。
+
+4. **ノートを検出**:
+   - クリアな音を歌うか口笛で吹いて、検出されたノート（例: `C4`, `G#5`）を確認。
+   - 「検出を一時停止」をクリックして分析を停止し、「検出を再開」で再開。
+
+5. **ログとフィルタリングを確認**:
+   - 「ノートの記録」にすべての検出ノートとタイムスタンプが表示されます（例: `2025-05-10 14:30:45: C4`）。
+   - 「フィルタリングされたシーケンス」に重複を除いたノートが表示されます（例: `C4, G3, A#4`）。
+
+### エラーが発生した場合：
+- **モーダルのエラーメッセージ**を確認し、指示に従ってください（例: マイクの接続確認、許可の再設定）。
+- ブラウザのコンソール（`Ctrl+Shift+J`）で詳細なエラーを確認。
+- 以下の情報を提供していただければ、さらにサポートします：
+  - 使用している環境（例: Replit、CodePen）。
+  - エラーメッセージ（モーダルまたはコンソール）。
+  - ブラウザとバージョン。
+  - マイクの状態（他のアプリで動作するか）。
+
+### 追加のヒント：
+- **ノートの精度**: クリアな単音を歌うか口笛で吹くと検出が正確になります。ノイズの多い環境は避けてください。
+- **ログのクリア**: 必要に応じて、ログをリセットするボタンを追加できます（リクエストがあれば実装可能）。
+- **フィルタリングのカスタマイズ**: 現在は連続する重複のみ削除しますが、例えば時間間隔に基づくフィルタリングなどが必要なら教えてください。
+
+このコードで、ノートログ、一時停止/再開、フィルタリングされたシーケンスの要件が満たされます。Replitでテストすることをお勧めしますが、問題があれば詳細を共有してください！
