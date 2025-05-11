@@ -1,0 +1,151 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravar e Analisar Música</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+    #output { margin-top: 20px; white-space: pre-wrap; }
+  </style>
+  <script src="https://unpkg.com/pitchy@4.1.0/pitchy.min.js"></script>
+</head>
+<body>
+  <h1>Gravar e Analisar Música</h1>
+  <button id="startBtn">Iniciar Gravação</button>
+  <button id="stopBtn" disabled>Parar Gravação</button>
+  <div id="output">Aguardando gravação...</div>
+
+  <script>
+    let audioContext;
+    let mediaRecorder;
+    let chunks = [];
+    let analyser;
+    let isRecording = false;
+    const notes = [];
+    const sampleRate = 44100;
+
+    // Notas musicais para mapeamento
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+    // Função para estimar tonalidade com base nas notas detectadas
+    function estimateKey(notes) {
+      if (notes.length === 0) return 'Desconhecida';
+      const noteCounts = {};
+      notes.forEach(note => {
+        noteCounts[note] = (noteCounts[note] || 0) + 1;
+      });
+      const mostCommonNote = Object.keys(noteCounts).reduce((a, b) =>
+        noteCounts[a] > noteCounts[b] ? a : b
+      );
+      return mostCommonNote.includes('#') ? mostCommonNote + ' menor' : mostCommonNote + ' maior';
+    }
+
+    // Função para converter frequência em nota musical
+    function frequencyToNote(frequency) {
+      if (!frequency || frequency < 20 || frequency > 20000) return null;
+      const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2)) + 49;
+      const noteIndex = Math.round(noteNum) % 12;
+      const octave = Math.floor((noteNum - 1) / 12) + 4;
+      return noteNames[noteIndex < 0 ? noteIndex + 12 : noteIndex] + octave;
+    }
+
+    // Função para processar áudio e detectar notas
+    async function processAudio(blob) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const channelData = audioBuffer.getChannelData(0);
+      const pitchDetector = Pitchy.PitchDetector.forFloat32Array(channelData.length);
+      const [pitch, clarity] = pitchDetector.findPitch(channelData, sampleRate);
+
+      if (clarity > 0.9) {
+        const note = frequencyToNote(pitch);
+        if (note) notes.push(note);
+      }
+
+      const key = estimateKey(notes);
+      const output = document.getElementById('output');
+      output.textContent = `Notas detectadas: ${notes.join(', ')}\nTonalidade estimada: ${key}`;
+    }
+
+    // Função para iniciar gravação
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+        mediaRecorder = new MediaRecorder(stream);
+        analyser = audioContext.createAnalyser();
+
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          chunks = [];
+          processAudio(blob);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+      } catch (err) {
+        console.error('Erro ao acessar o microfone:', err);
+        document.getElementById('output').textContent = 'Erro ao acessar o microfone.';
+      }
+    }
+
+    // Função para parar gravação
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+      }
+    }
+
+    // Event listeners para os botões
+    document.getElementById('startBtn').addEventListener('click', startRecording);
+    document.getElementById('stopBtn').addEventListener('click', stopRecording);
+  </script>
+</body>
+</html>
