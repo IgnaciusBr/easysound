@@ -9,7 +9,6 @@
     button { padding: 10px 20px; margin: 10px; font-size: 16px; }
     #output { margin-top: 20px; white-space: pre-wrap; }
   </style>
-  <script src="https://unpkg.com/pitchy@4.1.0/pitchy.min.js"></script>
 </head>
 <body>
   <h1>Gravar e Analisar Música</h1>
@@ -17,117 +16,121 @@
   <button id="stopBtn" disabled>Parar Gravação</button>
   <div id="output">Aguardando gravação...</div>
 
+  <script src="https://unpkg.com/pitchy@4.1.0/dist/pitchy.min.js" onload="initApp()" onerror="handlePitchyError()"></script>
   <script>
-    let audioContext;
-    let mediaRecorder;
-    let chunks = [];
-    let isRecording = false;
-    const notes = [];
-    const sampleRate = 44100;
-    const blockSize = 2048; // Tamanho do bloco para análise de notas
-
-    // Notas musicais para mapeamento
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-    // Função para estimar tonalidade com base nas notas detectadas
-    function estimateKey(notes) {
-      if (notes.length === 0) return 'Desconhecida';
-      const noteCounts = {};
-      notes.forEach(note => {
-        const baseNote = note.match(/[A-G]#?/)?.[0] || note;
-        noteCounts[baseNote] = (noteCounts[baseNote] || 0) + 1;
-      });
-      const mostCommonNote = Object.keys(noteCounts).reduce((a, b) =>
-        noteCounts[a] > noteCounts[b] ? a : b
-      );
-      return mostCommonNote.includes('#') ? mostCommonNote + ' menor' : mostCommonNote + ' maior';
+    function handlePitchyError() {
+      document.getElementById('output').textContent = 'Erro: Não foi possível carregar a biblioteca Pitchy. Verifique sua conexão ou tente novamente.';
     }
 
-    // Função para converter frequência em nota musical
-    function frequencyToNote(frequency) {
-      if (!frequency || frequency < 20 || frequency > 20000) return null;
-      const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2)) + 49;
-      const noteIndex = Math.round(noteNum) % 12;
-      const octave = Math.floor((noteNum - 1) / 12) + 4;
-      return noteNames[noteIndex < 0 ? noteIndex + 12 : noteIndex] + octave;
-    }
+    function initApp() {
+      if (!window.Pitchy) {
+        handlePitchyError();
+        return;
+      }
 
-    // Função para processar áudio em blocos
-    async function processAudio(blob) {
-      try {
-        const output = document.getElementById('output');
-        output.textContent = 'Processando áudio...';
-        notes.length = 0; // Limpar notas anteriores
+      let audioContext;
+      let mediaRecorder;
+      let chunks = [];
+      let isRecording = false;
+      const notes = [];
+      const sampleRate = 44100;
+      const blockSize = 2048;
 
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        const channelData = audioBuffer.getChannelData(0);
-        const pitchDetector = Pitchy.PitchDetector.forFloat32Array(blockSize);
+      const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-        // Processar em blocos
-        for (let i = 0; i < channelData.length - blockSize; i += blockSize) {
-          const block = channelData.slice(i, i + blockSize);
-          const [pitch, clarity] = pitchDetector.findPitch(block, sampleRate);
-          console.log(`Bloco ${i / blockSize}: Pitch=${pitch}, Clarity=${clarity}`);
+      function estimateKey(notes) {
+        if (notes.length === 0) return 'Desconhecida';
+        const noteCounts = {};
+        notes.forEach(note => {
+          const baseNote = note.match(/[A-G]#?/)?.[0] || note;
+          noteCounts[baseNote] = (noteCounts[baseNote] || 0) + 1;
+        });
+        const mostCommonNote = Object.keys(noteCounts).reduce((a, b) =>
+          noteCounts[a] > noteCounts[b] ? a : b
+        );
+        return mostCommonNote.includes('#') ? mostCommonNote + ' menor' : mostCommonNote + ' maior';
+      }
 
-          if (clarity > 0.85 && pitch) {
-            const note = frequencyToNote(pitch);
-            if (note && !notes.includes(note)) {
-              notes.push(note);
+      function frequencyToNote(frequency) {
+        if (!frequency || frequency < 20 || frequency > 20000) return null;
+        const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2)) + 49;
+        const noteIndex = Math.round(noteNum) % 12;
+        const octave = Math.floor((noteNum - 1) / 12) + 4;
+        return noteNames[noteIndex < 0 ? noteIndex + 12 : noteIndex] + octave;
+      }
+
+      async function processAudio(blob) {
+        try {
+          const output = document.getElementById('output');
+          output.textContent = 'Processando áudio...';
+          notes.length = 0;
+
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          const channelData = audioBuffer.getChannelData(0);
+          const pitchDetector = Pitchy.PitchDetector.forFloat32Array(blockSize);
+
+          for (let i = 0; i < channelData.length - blockSize; i += blockSize) {
+            const block = channelData.slice(i, i + blockSize);
+            const [pitch, clarity] = pitchDetector.findPitch(block, sampleRate);
+            console.log(`Bloco ${i / blockSize}: Pitch=${pitch}, Clarity=${clarity}`);
+
+            if (clarity > 0.85 && pitch) {
+              const note = frequencyToNote(pitch);
+              if (note && !notes.includes(note)) {
+                notes.push(note);
+              }
             }
           }
+
+          const key = estimateKey(notes);
+          if (notes.length > 0) {
+            output.textContent = `Notas detectadas: ${notes.join(', ')}\nTonalidade estimada: ${key}`;
+          } else {
+            output.textContent = 'Nenhuma nota detectada. Tente gravar um trecho mais claro.';
+          }
+        } catch (err) {
+          console.error('Erro ao processar áudio:', err);
+          document.getElementById('output').textContent = 'Erro ao processar o áudio: ' + err.message;
         }
+      }
 
-        const key = estimateKey(notes);
-        if (notes.length > 0) {
-          output.textContent = `Notas detectadas: ${notes.join(', ')}\nTonalidade estimada: ${key}`;
-        } else {
-          output.textContent = 'Nenhuma nota detectada. Tente gravar um trecho mais claro.';
+      async function startRecording() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+          mediaRecorder = new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = e => chunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            chunks = [];
+            processAudio(blob);
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          document.getElementById('startBtn').disabled = true;
+          document.getElementById('stopBtn').disabled = false;
+          document.getElementById('output').textContent = 'Gravando...';
+        } catch (err) {
+          console.error('Erro ao acessar o microfone:', err);
+          document.getElementById('output').textContent = 'Erro ao acessar o microfone.';
         }
-      } catch (err) {
-        console.error('Erro ao processar áudio:', err);
-        document.getElementById('output').textContent = 'Erro ao processar o áudio.';
       }
-    }
 
-    // Função para iniciar gravação
-    async function startRecording() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
-        mediaRecorder = new MediaRecorder(stream);
-
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          chunks = [];
-          processAudio(blob);
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = false;
-        document.getElementById('output').textContent = 'Gravando...';
-      } catch (err) {
-        console.error('Erro ao acessar o microfone:', err);
-        document.getElementById('output').textContent = 'Erro ao acessar o microfone.';
+      function stopRecording() {
+        if (mediaRecorder && isRecording) {
+          mediaRecorder.stop();
+          isRecording = false;
+          document.getElementById('startBtn').disabled = false;
+          document.getElementById('stopBtn').disabled = true;
+        }
       }
-    }
 
-    // Função para parar gravação
-    function stopRecording() {
-      if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
-        isRecording = false;
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('stopBtn').disabled = true;
-      }
+      document.getElementById('startBtn').addEventListener('click', startRecording);
+      document.getElementById('stopBtn').addEventListener('click', stopRecording);
     }
-
-    // Event listeners para os botões
-    document.getElementById('startBtn').addEventListener('click', startRecording);
-    document.getElementById('stopBtn').addEventListener('click', stopRecording);
   </script>
 </body>
 </html>
