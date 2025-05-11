@@ -1,0 +1,1334 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Piano Virtual</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f4f7fa;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    header {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: #fff;
+      padding: 15px;
+      text-align: center;
+      width: 100%;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    header i {
+      font-size: 1.8rem;
+      color: #e67e22;
+    }
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 15px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      position: relative;
+    }
+    .top-controls {
+      display: flex;
+      justify-content: flex-end;
+      width: 100%;
+      max-width: 1200px;
+      padding: 10px;
+      gap: 10px;
+    }
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 250px;
+      background: linear-gradient(135deg, #34495e, #2c3e50);
+      transform: translateX(-250px);
+      transition: transform 0.3s ease;
+      z-index: 200;
+      padding: 20px;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+      overflow-y: auto;
+    }
+    .sidebar.open {
+      transform: translateX(0);
+    }
+    .sidebar-toggle {
+      position: fixed;
+      top: 80px;
+      left: 0;
+      width: 10px;
+      height: 40px;
+      background: linear-gradient(135deg, #f76707, #e8590c);
+      color: #fff;
+      border: none;
+      border-radius: 0 5px 5px 0;
+      padding: 0;
+      cursor: pointer;
+      z-index: 201;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: left 0.3s ease, background 0.2s ease;
+    }
+    .sidebar.open + .sidebar-toggle {
+      left: 250px;
+    }
+    .sidebar-toggle:hover {
+      background: linear-gradient(135deg, #e8590c, #c0392b);
+    }
+    .sidebar-toggle i {
+      font-size: 12px;
+    }
+    .harmonic-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .piano-container {
+      display: flex;
+      align-items: center;
+      position: relative;
+      margin-top: 10px;
+    }
+    .piano {
+      display: flex;
+      flex-direction: row;
+      background-color: #fff;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+    .octave-btn {
+      width: 30px;
+      height: 100%;
+      background: linear-gradient(135deg, #6c757d, #495057);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease, transform 0.2s ease;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      position: absolute;
+      top: 0;
+      bottom: 0;
+    }
+    .octave-btn:hover {
+      background: linear-gradient(135deg, #495057, #343a40);
+      transform: scale(1.05);
+    }
+    .octave-btn.left {
+      left: -30px;
+      border-radius: 12px 0 0 12px;
+    }
+    .octave-btn.right {
+      right: -30px;
+      border-radius: 0 12px 12px 0;
+    }
+    .key {
+      width: 40px;
+      height: 180px;
+      border: 1px solid #ccc;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 10px;
+      font-size: 12px;
+      color: #333;
+      transition flesh: transform 0.1s ease, background 0.2s ease;
+      box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .white {
+      background: linear-gradient(#fff, #e8ecef);
+      z-index: 1;
+    }
+    .black {
+      background: linear-gradient(#2d3436, #000);
+      color: #fff;
+      width: 24px;
+      height: 110px;
+      margin: 0 -12px;
+      z-index: 2;
+      font-size: 10px;
+      padding-bottom: 8px;
+    }
+    .key:active, .key.playing {
+      background: linear-gradient(#74c0fc, #4dabf7);
+      transform: scale(0.97);
+    }
+    .black.playing {
+      background: linear-gradient(#1864ab, #0a4275);
+    }
+    .key.harmonic-note {
+      color: #e67e22;
+      text-shadow: 0 0 3px rgba(230, 126, 34, 0.5);
+    }
+    .black.harmonic-note {
+      color: #e67e22;
+      text-shadow: 0 0 3px rgba(230, 126, 34, 0.5);
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+    }
+    .mic-btn {
+      background: linear-gradient(135deg, #ff6b6b, #ee5253);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      justify-content: center;
+    }
+    .mic-btn:hover {
+      background: linear-gradient(135deg, #ee5253, #d63031);
+    }
+    .mic-btn.active {
+      background: linear-gradient(135deg, #d63031, #b71c1c);
+    }
+    .sustain-btn {
+      background: linear-gradient(135deg, #339af0, #1e90ff);
+    }
+    .sustain-btn:hover {
+      background: linear-gradient(135deg, #228be6, #1971d2);
+    }
+    .sustain-btn.active {
+      background: linear-gradient(135deg, #2ecc71, #26ad5f);
+    }
+    .key-map-btn {
+      background: linear-gradient(135deg, #868e96, #6c757d);
+    }
+    .key-map-btn:hover {
+      background: linear-gradient(135deg, #6c757d, #495057);
+    }
+    .harmonic-field-btn {
+      background: linear-gradient(135deg, #f76707, #e8590c);
+      justify-content: center;
+    }
+    .harmonic-field-btn:hover {
+      background: linear-gradient(135deg, #e8590c, #c0392b);
+    }
+    .harmonic-field-btn.active {
+      background: linear-gradient(135deg, #c0392b, #9b1d1d);
+    }
+    .chord-btn {
+      background: linear-gradient(135deg, #20c997, #12b886);
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+    .chord-btn:hover {
+      background: linear-gradient(135deg, #12b886, #099268);
+    }
+    #chords {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
+      margin: 10px auto;
+      background-color: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      max-width: 100%;
+      width: calc(40px * 36 + 20px);
+      overflow-x: auto;
+      justify-content: center;
+    }
+    footer {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: #fff;
+      padding: 12px;
+      text-align: center;
+      width: 100%;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    footer i {
+      color: #e67e22;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 300;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      max-width: 500px;
+      width: 90%;
+      position: relative;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    .modal-content h2 {
+      font-size: 1.6rem;
+      color: #2c3e50;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #333;
+      transition: color 0.2s;
+    }
+    .close-btn:hover {
+      color: #e67e22;
+    }
+    .key-map {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 15px;
+    }
+    .key-map div {
+      padding: 10px;
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+      font-size: 13px;
+      transition: background-color 0.2s;
+    }
+    .key-map div:nth-child(odd) {
+      background-color: #e9ecef;
+    }
+    .orientation-notice, .mic-notice {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #e67e22;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      z-index: 500;
+      font-size: 1rem;
+      text-align: center;
+      max-width: 90%;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .orientation-notice.show, .mic-notice.show {
+      display: block;
+      opacity: 1;
+    }
+    #rotationPrompt {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    #rotationPrompt .prompt-content {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      max-width: 90%;
+      animation: fadeIn 0.5s ease-in;
+    }
+    #rotationPrompt h2 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+    #rotationPrompt p {
+      font-size: 1rem;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+    #rotationPrompt .rotate-icon {
+      font-size: 3rem;
+      color: #e67e22;
+      animation: rotatePhone 2s infinite ease-in-out;
+    }
+    @keyframes rotatePhone {
+      0% { transform: rotate(0deg); }
+      25% { transform: rotate(90deg); }
+      50% { transform: rotate(90deg); }
+      75% { transform: rotate(0deg); }
+      100% { transform: rotate(0deg); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 768px) {
+      header {
+        padding: 8px;
+        gap: 6px;
+      }
+      header h1 {
+        font-size: 1.2rem;
+      }
+      header i {
+        font-size: 1rem;
+      }
+      .top-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 8px 16px;
+        font-size: 13px;
+      }
+      .mic-btn {
+        width: 36px;
+        height: 36px;
+      }
+      .sustain-btn, .key-map-btn {
+        padding: 8px 14px;
+        font-size: 12px;
+      }
+      .sidebar {
+        width: 200px;
+        transform: translateX(-200px);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .sidebar.open + .sidebar-toggle {
+        left: 200px;
+      }
+      .sidebar-toggle {
+        top: 50px;
+        height: 30px;
+      }
+      .piano {
+        padding: 8px;
+      }
+      .key {
+        width: 30px;
+        height: 120px;
+        font-size: 10px;
+      }
+      .black {
+        width: 18px;
+        height: 80px;
+        margin: 0 -9px;
+        font-size: 8px;
+        padding-bottom: 6px;
+      }
+      .octave-btn {
+        width: 25px;
+        font-size: 14px;
+      }
+      .octave-btn.left {
+        left: -25px;
+      }
+      .octave-btn.right {
+        right: -25px;
+      }
+      #chords {
+        gap: 6px;
+        padding: 8px;
+        width: calc(30px * 36 + 16px);
+      }
+      .modal-content {
+        max-width: 90%;
+        padding: 10px;
+      }
+      .modal-content h2 {
+        font-size: 1.4rem;
+      }
+      .key-map div {
+        font-size: 12px;
+        padding: 8px;
+      }
+      #rotationPrompt h2 {
+        font-size: 1.3rem;
+      }
+      #rotationPrompt p {
+        font-size: 0.9rem;
+      }
+      #rotationPrompt .rotate-icon {
+        font-size: 2.5rem;
+      }
+    }
+    @media (max-width: 480px) and (orientation: landscape) {
+      header {
+        padding: 6px;
+        gap: 4px;
+      }
+      header h1 {
+        font-size: 1rem;
+      }
+      header i {
+        font-size: 0.9rem;
+      }
+      .container {
+        padding: 10px;
+      }
+      .piano {
+        margin-top: 5px;
+      }
+      .key {
+        width: 25px;
+        height: 100px;
+        font-size: 9px;
+      }
+      .black {
+        width: 15px;
+        height: 60px;
+        margin: 0 -7.5px;
+        font-size: 7px;
+        padding-bottom: 5px;
+      }
+      .octave-btn {
+        width: 20px;
+        font-size: 12px;
+      }
+      .octave-btn.left {
+        left: -20px;
+      }
+      .octave-btn.right {
+        right: -20px;
+      }
+      .mic-btn {
+        width: 32px;
+        height: 32px;
+      }
+      #chords {
+        margin: 5px auto;
+        padding: 6px;
+        width: calc(25px * 36 + 12px);
+      }
+      .chord-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+      .sidebar-toggle {
+        top: 40px;
+        height: 25px;
+      }
+      .sidebar {
+        width: 180px;
+        transform: translateX(-180px);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .sidebar.open + .sidebar-toggle {
+        left: 180px;
+      }
+    }
+    @media screen and (orientation: portrait) {
+      #rotationPrompt {
+        display: flex;
+      }
+      .container, header, footer, .sidebar, .sidebar-toggle {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <i class="fas fa-piano"></i>
+    <h1>Piano Virtual Interativo</h1>
+  </header>
+  <div class="sidebar" id="sidebar">
+    <h2 style="color: #fff; font-size: 1.4rem; margin-bottom: 15px;">Campos Harmônicos</h2>
+    <div class="harmonic-fields" id="harmonicFields"></div>
+  </div>
+  <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-chevron-right"></i></button>
+  <div class="container">
+    <div class="top-controls">
+      <button id="micBtn" class="mic-btn"><i class="fas fa-microphone"></i></button>
+      <button id="sustainBtn" class="sustain-btn"><i class="fas fa-wave-square"></i> Ativar Sustain</button>
+      <button id="keyMapBtn" class="key-map-btn"><i class="fas fa-keyboard"></i> Mapa de Teclas</button>
+    </div>
+    <div id="chords"></div>
+    <div class="piano-container">
+      <button class="octave-btn left" id="prevOctave"><i class="fas fa-chevron-left"></i></button>
+      <div class="piano" id="piano"></div>
+      <button class="octave-btn right" id="nextOctave"><i class="fas fa-chevron-right"></i></button>
+    </div>
+  </div>
+  <footer>
+    <i class="fas fa-music"></i>
+    <p>Piano Virtual © 2025 - Desenvolvido com Tone.js</p>
+  </footer>
+  <div id="keyMapModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn">×</span>
+      <h2><i class="fas fa-keyboard"></i> Mapa de Teclas</h2>
+      <div class="key-map">
+        <div><strong>Z</strong> - C3</div>
+        <div><strong>S</strong> - C#3</div>
+        <div><strong>X</strong> - D3</div>
+        <div><strong>D</strong> - D#3</div>
+        <div><strong>C</strong> - E3</div>
+        <div><strong>V</strong> - F3</div>
+        <div><strong>G</strong> - F#3</div>
+        <div><strong>B</strong> - G3</div>
+        <div><strong>H</strong> - G#3</div>
+        <div><strong>N</strong> - A3</div>
+        <div><strong>J</strong> - A#3</div>
+        <div><strong>M</strong> - B3</div>
+        <div><strong>Q</strong> - C4</div>
+        <div><strong>2</strong> - C#4</div>
+        <div><strong>W</strong> - D4</div>
+        <div><strong>3</strong> - D#4</div>
+        <div><strong>E</strong> - E4</div>
+        <div><strong>R</strong> - F4</div>
+        <div><strong>5</strong> - F#4</div>
+        <div><strong>T</strong> - G4</div>
+        <div><strong>6</strong> - G#4</div>
+        <div><strong>Y</strong> - A4</div>
+        <div><strong>7</strong> - A#4</div>
+        <div><strong>U</strong> - B4</div>
+        <div><strong>A</strong> - Acorde 1</div>
+        <div><strong>F</strong> - Acorde 2</div>
+        <div><strong>K</strong> - Acorde 3</div>
+        <div><strong>L</strong> - Acorde 4</div>
+        <div><strong>I</strong> - Acorde 5</div>
+        <div><strong>O</strong> - Acorde 6</div>
+        <div><strong>P</strong> - Acorde 7</div>
+      </div>
+    </div>
+  </div>
+  <div id="orientationNotice" class="orientation-notice">
+    Por favor, gire seu dispositivo para o modo paisagem para melhor visualização.
+  </div>
+  <div id="micNotice" class="mic-notice">
+    Nenhuma nota detectada
+  </div>
+  <div id="rotationPrompt">
+    <div class="prompt-content">
+      <h2>Gire o Dispositivo</h2>
+      <p>Por favor, gire seu dispositivo para o modo paisagem para uma melhor experiência com o Piano Virtual.</p>
+      <i class="fas fa-mobile-alt rotate-icon"></i>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <script>
+    const sampler = new Tone.Sampler({
+      urls: {
+        "A0": "A0.mp3",
+        "C1": "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        "A1": "A1.mp3",
+        "C2": "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        "A2": "A2.mp3",
+        "C3": "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        "A3": "A3.mp3",
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+        "C5": "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        "A5": "A5.mp3",
+        "C6": "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        "A6": "A6.mp3",
+        "C7": "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        "A7": "A7.mp3",
+        "C8": "C8.mp3"
+      },
+      release: 1,
+      baseUrl: "https://tonejs.github.io/audio/salamander/"
+    }).toDestination();
+
+    const allNotes = [];
+    for (let octave = 1; octave <= 7; octave++) {
+      const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      notes.forEach(note => allNotes.push(`${note}${octave}`));
+    }
+
+    const blackKeys = ['C#', 'D#', 'F#', 'G#', 'A#'];
+    let currentStartOctave = 3;
+    const keysPerOctave = 12;
+    const octavesToShow = 3;
+    let micPermissionGranted = false;
+
+    function renderPiano() {
+      const piano = document.getElementById('piano');
+      piano.innerHTML = '';
+      const startIndex = (currentStartOctave - 1) * keysPerOctave;
+      const endIndex = startIndex + (octavesToShow * keysPerOctave);
+      const visibleNotes = allNotes.slice(startIndex, endIndex);
+      const harmonicNotes = activeField ? getHarmonicNotes(activeField) : [];
+
+      visibleNotes.forEach(note => {
+        const key = document.createElement('div');
+        key.classList.add('key');
+        const isBlack = blackKeys.some(black => note.includes(black));
+        key.classList.add(isBlack ? 'black' : 'white');
+        if (harmonicNotes.includes(note)) {
+          key.classList.add('harmonic-note');
+        }
+        key.dataset.note = note;
+        key.textContent = note;
+        piano.appendChild(key);
+
+        key.addEventListener('click', async () => {
+          if (Tone.context.state !== 'running') {
+            await Tone.start();
+          }
+          const duration = sustain ? '2n' : '8n';
+          sampler.triggerAttackRelease(note, duration);
+          highlightKey(key);
+        });
+
+        key.addEventListener('touchstart', async (e) => {
+          e.preventDefault();
+          if (Tone.context.state !== 'running') {
+            await Tone.start();
+          }
+          const duration = sustain ? '2n' : '8n';
+          sampler.triggerAttackRelease(note, duration);
+          highlightKey(key);
+        }, { passive: false });
+      });
+
+      if (activeField) {
+        updateChords(activeField);
+      }
+    }
+
+    function getHarmonicNotes(field) {
+      const root = field.split(' ')[0];
+      const isMinor = field.includes('Menor');
+      const scale = isMinor ? getMinorScale(root) : getMajorScale(root);
+      const harmonicNotes = [];
+      for (let octave = currentStartOctave; octave < currentStartOctave + octavesToShow; octave++) {
+        scale.forEach(note => harmonicNotes.push(`${note}${octave}`));
+      }
+      return harmonicNotes;
+    }
+
+    document.getElementById('prevOctave').addEventListener('click', () => {
+      if (currentStartOctave > 1) {
+        currentStartOctave--;
+        renderPiano();
+      }
+    });
+
+    document.getElementById('nextOctave').addEventListener('click', () => {
+      if (currentStartOctave < 5) {
+        currentStartOctave++;
+        renderPiano();
+      }
+    });
+
+    document.getElementById('prevOctave').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (currentStartOctave > 1) {
+        currentStartOctave--;
+        renderPiano();
+      }
+    }, { passive: false });
+
+    document.getElementById('nextOctave').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (currentStartOctave < 5) {
+        currentStartOctave++;
+        renderPiano();
+      }
+    }, { passive: false });
+
+    let sustain = false;
+    const sustainBtn = document.getElementById('sustainBtn');
+    sustainBtn.addEventListener('click', () => {
+      sustain = !sustain;
+      sustainBtn.innerHTML = sustain 
+        ? '<i class="fas fa-wave-square"></i> Desativar Sustain' 
+        : '<i class="fas fa-wave-square"></i> Ativar Sustain';
+      sustainBtn.classList.toggle('active', sustain);
+      if (!sustain) {
+        sustainedNotes.forEach(note => sampler.triggerRelease(note));
+        sustainedNotes = [];
+      }
+    });
+
+    sustainBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      sustain = !sustain;
+      sustainBtn.innerHTML = sustain 
+        ? '<i class="fas fa-wave-square"></i> Desativar Sustain' 
+        : '<i class="fas fa-wave-square"></i> Ativar Sustain';
+      sustainBtn.classList.toggle('active', sustain);
+      if (!sustain) {
+        sustainedNotes.forEach(note => sampler.triggerRelease(note));
+        sustainedNotes = [];
+      }
+    }, { passive: false });
+
+    function highlightKey(key) {
+      key.classList.add('playing');
+      setTimeout(() => key.classList.remove('playing'), 200);
+    }
+
+    const keyToNote = {
+      'z': 'C3', 's': 'C#3', 'x': 'D3', 'd': 'D#3', 'c': 'E3', 'v': 'F3', 'g': 'F#3', 'b': 'G3', 'h': 'G#3', 'n': 'A3', 'j': 'A#3', 'm': 'B3',
+      'q': 'C4', '2': 'C#4', 'w': 'D4', '3': 'D#4', 'e': 'E4', 'r': 'F4', '5': 'F#4', 't': 'G4', '6': 'G#4', 'y': 'A4', '7': 'A#4', 'u': 'B4'
+    };
+
+    const chordKeyToIndex = {
+      'a': 0, // Acorde 1
+      'f': 1, // Acorde 2
+      'k': 2, // Acorde 3
+      'l': 3, // Acorde 4
+      'i': 4, // Acorde 5
+      'o': 5, // Acorde 6
+      'p': 6  // Acorde 7
+    };
+
+    let pressedKeys = new Set();
+    let sustainedNotes = [];
+    let chordButtons = [];
+
+    document.addEventListener('keydown', async (event) => {
+      const key = event.key.toLowerCase();
+
+      if (keyToNote[key] && !pressedKeys.has(key)) {
+        pressedKeys.add(key);
+        const note = keyToNote[key];
+        if (Tone.context.state !== 'running') {
+          await Tone.start();
+        }
+        sampler.triggerAttack(note);
+        if (sustain) {
+          sustainedNotes.push(note);
+        }
+        const keyElement = document.querySelector(`.key[data-note="${note}"]`);
+        if (keyElement) highlightKey(keyElement);
+      }
+
+      if (chordKeyToIndex[key] !== undefined && !pressedKeys.has(key) && activeField) {
+        pressedKeys.add(key);
+        const chordIndex = chordKeyToIndex[key];
+        if (chordButtons[chordIndex]) {
+          const chord = chordButtons[chordIndex].textContent.replace(/^\s*<i[^>]*><\/i>\s*/, '').trim();
+          const notes = harmonicFields[activeField].notes[chord];
+          if (notes) {
+            if (Tone.context.state !== 'running') {
+              await Tone.start();
+            }
+            const duration = sustain ? '2n' : '8n';
+            sampler.triggerAttackRelease(notes, duration);
+            notes.forEach(note => {
+              const key = document.querySelector(`.key[data-note="${note}"]`);
+              if (key) highlightKey(key);
+            });
+          }
+        }
+      }
+    });
+
+    document.addEventListener('keyup', (event) => {
+      const key = event.key.toLowerCase();
+      if (keyToNote[key] && pressedKeys.has(key)) {
+        pressedKeys.delete(key);
+        const note = keyToNote[key];
+        if (!sustain) {
+          sampler.triggerRelease(note);
+        }
+      }
+      if (chordKeyToIndex[key] !== undefined && pressedKeys.has(key)) {
+        pressedKeys.delete(key);
+      }
+    });
+
+    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const majorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const minorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+    function getMajorScale(root) {
+      const scaleIntervals = [0, 2, 4, 5, 7, 9, 11];
+      const rootIndex = chromaticNotes.indexOf(root);
+      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
+    }
+
+    function getMinorScale(root) {
+      const scaleIntervals = [0, 2, 3, 5, 7, 8, 10];
+      const rootIndex = chromaticNotes.indexOf(root);
+      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
+    }
+
+    function getChords(scale, isMinor = false) {
+      const chordTypes = isMinor
+        ? ['m', 'dim', '', 'm', 'm', '', '']
+        : ['', 'm', 'm', '', '', 'm', 'dim'];
+      const middleOctave = currentStartOctave + 1;
+      return scale.map((note, i) => {
+        const chordRoot = note;
+        const third = scale[(i + 2) % 7];
+        const fifth = scale[(i + 4) % 7];
+        const chordType = chordTypes[i];
+        const chordName = chordType === 'm' ? chordRoot + 'm' : chordType === 'dim' ? chordRoot + 'dim' : chordRoot;
+        return {
+          name: chordName,
+          notes: [chordRoot + middleOctave, third + middleOctave, fifth + middleOctave]
+        };
+      });
+    }
+
+    const harmonicFields = {};
+    majorKeys.forEach(root => {
+      const majorScale = getMajorScale(root);
+      const majorChords = getChords(majorScale);
+      harmonicFields[`${root} Maior`] = {
+        chords: majorChords.map(chord => chord.name),
+        notes: majorChords.reduce((acc, chord) => {
+          acc[chord.name] = chord.notes;
+          return acc;
+        }, {})
+      };
+    });
+
+    minorKeys.forEach(root => {
+      const minorScale = getMinorScale(root);
+      const minorChords = getChords(minorScale, true);
+      harmonicFields[`${root} Menor`] = {
+        chords: minorChords.map(chord => chord.name),
+        notes: minorChords.reduce((acc, chord) => {
+          acc[chord.name] = chord.notes;
+          return acc;
+        }, {})
+      };
+    });
+
+    const harmonicFieldsContainer = document.getElementById('harmonicFields');
+    const chordsContainer = document.getElementById('chords');
+    let activeField = null;
+
+    Object.keys(harmonicFields).forEach(field => {
+      const btn = document.createElement('button');
+      btn.classList.add('harmonic-field-btn');
+      btn.textContent = field;
+      btn.addEventListener('click', () => {
+        if (activeField === field) return;
+        activeField = field;
+        document.querySelectorAll('.harmonic-field-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        updateChords(field);
+        renderPiano();
+      });
+
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (activeField === field) return;
+        activeField = field;
+        document.querySelectorAll('.harmonic-field-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        updateChords(field);
+        renderPiano();
+      }, { passive: false });
+
+      harmonicFieldsContainer.appendChild(btn);
+    });
+
+    function updateChords(field) {
+      const root = field.split(' ')[0];
+      const isMinor = field.includes('Menor');
+      const scale = isMinor ? getMinorScale(root) : getMajorScale(root);
+      const chords = getChords(scale, isMinor);
+      harmonicFields[field].notes = chords.reduce((acc, chord) => {
+        acc[chord.name] = chord.notes;
+        return acc;
+      }, {});
+      displayChords(field);
+    }
+
+    function displayChords(field) {
+      chordsContainer.innerHTML = '';
+      chordButtons = [];
+      const fieldData = harmonicFields[field];
+      fieldData.chords.forEach(chord => {
+        const btn = document.createElement('button');
+        btn.classList.add('chord-btn');
+        btn.innerHTML = `<i class="fas fa-music"></i> ${chord}`;
+        btn.addEventListener('click', async () => {
+          if (Tone.context.state !== 'running') {
+            await Tone.start();
+          }
+          const notes = fieldData.notes[chord];
+          const duration = sustain ? '2n' : '8n';
+          sampler.triggerAttackRelease(notes, duration);
+          notes.forEach(note => {
+            const key = document.querySelector(`.key[data-note="${note}"]`);
+            if (key) highlightKey(key);
+          });
+        });
+
+        btn.addEventListener('touchstart', async (e) => {
+          e.preventDefault();
+          if (Tone.context.state !== 'running') {
+            await Tone.start();
+          }
+          const notes = fieldData.notes[chord];
+          const duration = sustain ? '2n' : '8n';
+          sampler.triggerAttackRelease(notes, duration);
+          notes.forEach(note => {
+            const key = document.querySelector(`.key[data-note="${note}"]`);
+            if (key) highlightKey(key);
+          });
+        }, { passive: false });
+
+        chordsContainer.appendChild(btn);
+        chordButtons.push(btn);
+      });
+    }
+
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      sidebarToggle.innerHTML = sidebar.classList.contains('open') 
+        ? '<i class="fas fa-chevron-left"></i>' 
+        : '<i class="fas fa-chevron-right"></i>';
+    });
+
+    sidebarToggle.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      sidebar.classList.toggle('open');
+      sidebarToggle.innerHTML = sidebar.classList.contains('open') 
+        ? '<i class="fas fa-chevron-left"></i>' 
+        : '<i class="fas fa-chevron-right"></i>';
+    }, { passive: false });
+
+    const keyMapBtn = document.getElementById('keyMapBtn');
+    const keyMapModal = document.getElementById('keyMapModal');
+    const closeBtn = document.querySelector('.close-btn');
+
+    keyMapBtn.addEventListener('click', () => {
+      keyMapModal.style.display = 'flex';
+    });
+
+    keyMapBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      keyMapModal.style.display = 'flex';
+    }, { passive: false });
+
+    closeBtn.addEventListener('click', () => {
+      keyMapModal.style.display = 'none';
+    });
+
+    closeBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      keyMapModal.style.display = 'none';
+    }, { passive: false });
+
+    // Controle da tela de rotação
+    const rotationPrompt = document.getElementById('rotationPrompt');
+    function updateOrientation() {
+      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+      rotationPrompt.style.display = isPortrait ? 'flex' : 'none';
+      if (!isPortrait) {
+        renderPiano();
+      }
+    }
+
+    if (screen.orientation) {
+      screen.orientation.addEventListener("change", () => {
+        updateOrientation();
+        const notice = document.getElementById('orientationNotice');
+        if (screen.orientation.type.includes("portrait")) {
+          notice.classList.add('show');
+          setTimeout(() => {
+            notice.classList.remove('show');
+          }, 3000);
+        } else {
+          notice.classList.remove('show');
+        }
+      });
+    } else {
+      window.addEventListener("orientationchange", () => {
+        updateOrientation();
+        const notice = document.getElementById('orientationNotice');
+        if (window.orientation === 0 || window.orientation === 180) {
+          notice.classList.add('show');
+          setTimeout(() => {
+            notice.classList.remove('show');
+          }, 3000);
+        } else {
+          notice.classList.remove('show');
+        }
+      });
+    }
+
+    // Microfone e detecção de nota
+    const micBtn = document.getElementById('micBtn');
+    const micNotice = document.getElementById('micNotice');
+
+    function adjustOctaveForNote(note) {
+      const octave = parseInt(note.match(/\d+$/)[0], 10);
+      const minVisibleOctave = currentStartOctave;
+      const maxVisibleOctave = currentStartOctave + octavesToShow - 1;
+      if (octave < minVisibleOctave || octave > maxVisibleOctave) {
+        currentStartOctave = Math.max(1, Math.min(5, octave - 1));
+        console.log(`Ajustando oitava para ${currentStartOctave} para exibir nota ${note}`);
+        renderPiano();
+      }
+    }
+
+    function frequencyToNote(frequency) {
+      if (!frequency || frequency < 50 || frequency > 2000) {
+        console.log(`Frequência inválida: ${frequency} Hz`);
+        return null;
+      }
+      const midiNumber = 12 * (Math.log2(frequency / 440)) + 69;
+      const roundedMidi = Math.round(midiNumber);
+      const noteIndex = roundedMidi % 12;
+      const octave = Math.floor(roundedMidi / 12) - 1;
+      const noteName = chromaticNotes[noteIndex];
+      const note = `${noteName}${octave}`;
+      const noteFrequency = 440 * Math.pow(2, (roundedMidi - 69) / 12);
+      const similarity = 1 - Math.abs(frequency - noteFrequency) / noteFrequency;
+      console.log(`Frequência: ${frequency.toFixed(2)} Hz, Nota: ${note}, Similaridade: ${(similarity * 100).toFixed(2)}%`);
+      if (similarity < 0.90 || !allNotes.includes(note)) {
+        console.log(`Nota rejeitada: Similaridade ${similarity} ou nota ${note} não está em allNotes`);
+        return null;
+      }
+      return { note, similarity };
+    }
+
+    async function startMicrophone() {
+      if (!micPermissionGranted) {
+        console.log('Solicitando permissão do microfone');
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micPermissionGranted = true;
+        console.log('Permissão do microfone concedida');
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        micBtn.classList.add('active');
+        micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const sampleRate = audioContext.sampleRate;
+        const binWidth = sampleRate / analyser.fftSize;
+        const frequencies = [];
+        const amplitudes = [];
+
+        const detectPitch = () => {
+          analyser.getByteFrequencyData(dataArray);
+          let maxAmplitude = 0;
+          let maxIndex = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            if (dataArray[i] > maxAmplitude) {
+              maxAmplitude = dataArray[i];
+              maxIndex = i;
+            }
+          }
+          if (maxAmplitude > 50) {
+            const frequency = maxIndex * binWidth;
+            frequencies.push(frequency);
+            amplitudes.push(maxAmplitude);
+            console.log(`Detectado: ${frequency.toFixed(2)} Hz, Amplitude: ${maxAmplitude}`);
+          }
+        };
+
+        const pitchInterval = setInterval(detectPitch, 50);
+        setTimeout(async () => {
+          clearInterval(pitchInterval);
+          source.disconnect();
+          stream.getTracks().forEach(track => track.stop());
+          audioContext.close();
+          micBtn.classList.remove('active');
+          micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+
+          if (frequencies.length === 0) {
+            console.log('Nenhuma frequência válida detectada, exibindo pop-up');
+            micNotice.textContent = 'Nenhuma nota detectada';
+            micNotice.classList.add('show');
+            setTimeout(() => {
+              micNotice.classList.remove('show');
+            }, 3000);
+            return;
+          }
+
+          // Calcular média ponderada das frequências
+          let totalWeight = 0;
+          let weightedSum = 0;
+          for (let i = 0; i < frequencies.length; i++) {
+            const weight = amplitudes[i];
+            weightedSum += frequencies[i] * weight;
+            totalWeight += weight;
+          }
+          const averageFrequency = weightedSum / totalWeight;
+          console.log(`Frequência média: ${averageFrequency.toFixed(2)} Hz`);
+
+          const result = frequencyToNote(averageFrequency);
+          if (result) {
+            const { note, similarity } = result;
+            adjustOctaveForNote(note);
+            const key = document.querySelector(`.key[data-note="${note}"]`);
+            if (key) {
+              console.log(`Nota detectada: ${note}, Similaridade: ${(similarity * 100).toFixed(2)}%`);
+              micNotice.textContent = `Nota detectada: ${note} (${(similarity * 100).toFixed(0)}%)`;
+              micNotice.classList.add('show');
+              setTimeout(() => {
+                micNotice.classList.remove('show');
+                micNotice.textContent = 'Nenhuma nota detectada';
+              }, 3000);
+              if (Tone.context.state !== 'running') {
+                await Tone.start();
+              }
+              sampler.triggerAttackRelease(note, '8n');
+              highlightKey(key);
+            }
+          } else {
+            console.log('Nenhuma nota detectada, exibindo pop-up');
+            micNotice.textContent = 'Nenhuma nota detectada';
+            micNotice.classList.add('show');
+            setTimeout(() => {
+              micNotice.classList.remove('show');
+            }, 3000);
+          }
+        }, 5000);
+      } catch (err) {
+        console.error('Erro ao acessar o microfone:', err);
+        micNotice.textContent = 'Erro ao acessar o microfone';
+        micNotice.classList.add('show');
+        setTimeout(() => {
+          micNotice.classList.remove('show');
+          micNotice.textContent = 'Nenhuma nota detectada';
+        }, 3000);
+      }
+    }
+
+    micBtn.addEventListener('click', startMicrophone);
+    micBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startMicrophone();
+    }, { passive: false });
+
+    // Inicializar orientação
+    updateOrientation();
+
+    renderPiano();
+  </script>
+</body>
+</html>
