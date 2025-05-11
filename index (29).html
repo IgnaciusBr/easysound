@@ -1,0 +1,422 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detector de Notas Musicais</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #note {
+            font-size: 2em;
+            margin: 20px;
+            color: #333;
+        }
+        #controlButton {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #controlButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #controlButton:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        #error {
+            color: red;
+            margin-top: 10px;
+            max-width: 80%;
+            text-align: center;
+        }
+        #noteHistory {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 200px;
+            background-color: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #noteHistory h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+        #noteHistoryList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #noteHistoryList li {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .modal {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+        }
+        .modal-content button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 10px;
+        }
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+        .modal-content #modalError {
+            color: red;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Detector de Notas Musicais</h1>
+    <div id="note">Cante uma nota!</div>
+    <button id="controlButton" disabled>Detectando...</button>
+    <div id="error"></div>
+    <div id="noteHistory">
+        <h3>Notas Registradas</h3>
+        <ul id="noteHistoryList"></ul>
+    </div>
+
+    <div id="permissionModal" class="modal">
+        <div class="modal-content">
+            <h2>Permissão de Microfone</h2>
+            <p>Precisamos acessar seu microfone para detectar as notas que você cantarola. Clique abaixo para permitir.</p>
+            <button id="allowMicButton">Permitir Microfone</button>
+            <button id="retryButton" style="display: none;">Tentar Novamente</button>
+            <div id="modalError"></div>
+        </div>
+    </div>
+
+    <script>
+        const noteDisplay = document.getElementById('note');
+        const controlButton = document.getElementById('controlButton');
+        const errorDisplay = document.getElementById('error');
+        const permissionModal = document.getElementById('permissionModal');
+        const allowMicButton = document.getElementById('allowMicButton');
+        const retryButton = document.getElementById('retryButton');
+        const modalError = document.getElementById('modalError');
+        const noteHistoryList = document.getElementById('noteHistoryList');
+
+        const noteFrequencies = {
+            'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
+            'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
+            'A#': 466.16, 'B': 493.88
+        };
+
+        let noteHistory = [];
+        let lastNote = null;
+        let lastNoteTime = 0;
+        let isDetecting = false;
+        let animationFrameId = null;
+        let audioContext = null;
+        let analyser = null;
+        let source = null;
+
+        function frequencyToNote(frequency) {
+            if (!frequency || frequency < 100 || frequency > 1000) return 'Nenhuma nota detectada';
+            
+            const A4 = 440;
+            const semitone = Math.pow(2, 1/12);
+            const noteNumber = 12 * Math.log2(frequency / A4);
+            const noteIndex = Math.round(noteNumber) % 12;
+            const octave = Math.floor((noteNumber + 9) / 12) + 4;
+
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const note = noteNames[noteIndex < 0 ? noteIndex + 12 : noteIndex];
+            
+            return `${note}${octave}`;
+        }
+
+        function isSecureContext() {
+            return window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        }
+
+        function updateNoteHistory(note) {
+            if (note === 'Nenhuma nota detectada') return;
+
+            const currentTime = Date.now();
+            if (note !== lastNote || (currentTime - lastNoteTime) > 500) {
+                noteHistory.push({ note, time: currentTime });
+                lastNote = note;
+                lastNoteTime = currentTime;
+
+                // Filtra duplicatas consecutivas para exibição
+                const filteredHistory = [];
+                let prevNote = null;
+                for (const entry of noteHistory) {
+                    if (entry.note !== prevNote) {
+                        filteredHistory.push(entry);
+                        prevNote = entry.note;
+                    }
+                }
+
+                // Atualiza a lista na interface
+                noteHistoryList.innerHTML = filteredHistory.map(entry => `<li>${entry.note} (${new Date(entry.time).toLocaleTimeString()})</li>`).join('');
+                noteHistoryList.scrollTop = noteHistoryList.scrollHeight;
+            }
+        }
+
+        async function requestMicPermission() {
+            modalError.textContent = '';
+            allowMicButton.style.display = 'none';
+            retryButton.style.display = 'inline-block';
+
+            if (!window.AudioContext && !window.webkitAudioContext) {
+                modalError.textContent = 'Erro: Seu navegador não suporta a Web Audio API. Use Chrome, Firefox ou Edge.';
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                modalError.textContent = 'Erro: Seu navegador não suporta acesso ao microfone. Tente atualizar ou usar outro navegador.';
+                return;
+            }
+
+            if (!isSecureContext()) {
+                modalError.textContent = 'Erro: Esta página precisa ser acessada via HTTPS ou localhost. Tente abrir em um ambiente HTTPS como Replit ou CodePen.';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                permissionModal.style.display = 'none';
+                controlButton.disabled = false;
+                startPitchDetection(stream);
+            } catch (err) {
+                console.error('Erro ao acessar o microfone:', err);
+                let errorMessage = 'Erro desconhecido ao acessar o microfone.';
+                if (err.name === 'NotAllowedError') {
+                    errorMessage = 'Permissão para o microfone negada. Clique em "Permitir" no prompt do navegador ou verifique as configurações (ex.: chrome://settings/content/microphone).';
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage = 'Nenhum microfone encontrado. Conecte um microfone e verifique se está habilitado nas configurações do sistema.';
+                } else if (err.name === 'SecurityError') {
+                    errorMessage = 'Erro de segurança: Esta página precisa ser acessada via HTTPS ou localhost.';
+                } else if (err.name === 'NotReadableError') {
+                    errorMessage = 'O microfone está em uso por outro aplicativo. Feche outros aplicativos que usam o microfone.';
+                } else {
+                    errorMessage = `Erro: ${err.message || 'Falha ao acessar o microfone.'} Tente novamente ou use outro navegador.`;
+                }
+                modalError.textContent = errorMessage;
+            }
+        }
+
+        function startPitchDetection(stream) {
+            errorDisplay.textContent = '';
+
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                source = audioContext.createMediaStreamSource(stream);
+
+                analyser.fftSize = 2048;
+                source.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Float32Array(bufferLength);
+
+                function detectPitch() {
+                    if (!isDetecting) return;
+
+                    analyser.getFloatTimeDomainData(dataArray);
+                    
+                    let bestOffset = -1;
+                    let bestCorrelation = 0;
+                    let rms = 0;
+
+                    for (let i = 0; i < bufferLength; i++) {
+                        rms += dataArray[i] * dataArray[i];
+                    }
+                    rms = Math.sqrt(rms / bufferLength);
+
+                    if (rms < 0.01) {
+                        noteDisplay.textContent = 'Nenhuma nota detectada';
+                        updateNoteHistory('Nenhuma nota detectada');
+                        animationFrameId = requestAnimationFrame(detectPitch);
+                        return;
+                    }
+
+                    for (let offset = 10; offset < bufferLength / 2; offset++) {
+                        let correlation = 0;
+                        for (let i = 0; i < bufferLength - offset; i++) {
+                            correlation += Math.abs(dataArray[i] * dataArray[i + offset]);
+                        }
+                        correlation = correlation / (bufferLength - offset);
+                        if (correlation > bestCorrelation) {
+                            bestCorrelation = correlation;
+                            bestOffset = offset;
+                        }
+                    }
+
+                    if (bestCorrelation > 0.1) {
+                        const sampleRate = audioContext.sampleRate;
+                        const frequency = sampleRate / bestOffset;
+                        const note = frequencyToNote(frequency);
+                        noteDisplay.textContent = note;
+                        updateNoteHistory(note);
+                    } else {
+                        noteDisplay.textContent = 'Nenhuma nota detectada';
+                        updateNoteHistory('Nenhuma nota detectada');
+                    }
+
+                    animationFrameId = requestAnimationFrame(detectPitch);
+                }
+
+                isDetecting = true;
+                controlButton.textContent = 'Pausar';
+                detectPitch();
+            } catch (err) {
+                console.error('Erro ao configurar a detecção:', err);
+                errorDisplay.textContent = 'Erro ao configurar a detecção de áudio. Tente reiniciar a página.';
+                controlButton.disabled = false;
+                controlButton.textContent = 'Iniciar Detecção';
+                permissionModal.style.display = 'flex';
+            }
+        }
+
+        function toggleDetection() {
+            if (isDetecting) {
+                isDetecting = false;
+                cancelAnimationFrame(animationFrameId);
+                controlButton.textContent = 'Retomar';
+                noteDisplay.textContent = 'Detecção pausada';
+            } else {
+                isDetecting = true;
+                controlButton.textContent = 'Pausar';
+                noteDisplay.textContent = 'Cante uma nota!';
+                const detectPitch = () => {
+                    if (!isDetecting) return;
+
+                    analyser.getFloatTimeDomainData(new Float32Array(analyser.fftSize));
+                    
+                    let bestOffset = -1;
+                    let bestCorrelation = 0;
+                    let rms = 0;
+
+                    const dataArray = new Float32Array(analyser.fftSize);
+                    analyser.getFloatTimeDomainData(dataArray);
+
+                    for (let i = 0; i < dataArray.length; i++) {
+                        rms += dataArray[i] * dataArray[i];
+                    }
+                    rms = Math.sqrt(rms / dataArray.length);
+
+                    if (rms < 0.01) {
+                        noteDisplay.textContent = 'Nenhuma nota detectada';
+                        updateNoteHistory('Nenhuma nota detectada');
+                        animationFrameId = requestAnimationFrame(detectPitch);
+                        return;
+                    }
+
+                    for (let offset = 10; offset < dataArray.length / 2; offset++) {
+                        let correlation = 0;
+                        for (let i = 0; i < dataArray.length - offset; i++) {
+                            correlation += Math.abs(dataArray[i] * dataArray[i + offset]);
+                        }
+                        correlation = correlation / (dataArray.length - offset);
+                        if (correlation > bestCorrelation) {
+                            bestCorrelation = correlation;
+                            bestOffset = offset;
+                        }
+                    }
+
+                    if (bestCorrelation > 0.1) {
+                        const sampleRate = audioContext.sampleRate;
+                        const frequency = sampleRate / bestOffset;
+                        const note = frequencyToNote(frequency);
+                        noteDisplay.textContent = note;
+                        updateNoteHistory(note);
+                    } else {
+                        noteDisplay.textContent = 'Nenhuma nota detectada';
+                        updateNoteHistory('Nenhuma nota detectada');
+                    }
+
+                    animationFrameId = requestAnimationFrame(detectPitch);
+                };
+                detectPitch();
+            }
+        }
+
+        allowMicButton.addEventListener('click', requestMicPermission);
+        retryButton.addEventListener('click', requestMicPermission);
+        controlButton.addEventListener('click', toggleDetection);
+    </script>
+</body>
+</html>
