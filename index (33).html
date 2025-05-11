@@ -1,0 +1,147 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analisador de Melodia</title>
+  <script src="https://cdn.jsdelivr.net/npm/pitchy@4.0.0/dist/pitchy.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+    #output { margin-top: 20px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>Analisador de Melodia</h1>
+  <p>Cante ou toque uma melodia e veja as notas e a tonalidade!</p>
+  <button id="recordBtn">Gravar</button>
+  <button id="stopBtn" disabled>Parar</button>
+  <div id="output"></div>
+
+  <script>
+    const recordBtn = document.getElementById('recordBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const output = document.getElementById('output');
+    let audioContext, analyser, stream, pitchDetector, notes = [];
+
+    // Mapeamento de frequências para notas musicais
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    function frequencyToNote(freq) {
+      if (freq < 20 || freq > 2000) return null; // Faixa audível
+      const noteNum = 12 * (Math.log2(freq / 440)) + 49;
+      const noteIndex = Math.round(noteNum) % 12;
+      const octave = Math.floor((noteNum + 8) / 12);
+      return { note: noteNames[noteIndex], octave };
+    }
+
+    // Estimar tonalidade (simplificado)
+    function estimateKey(notes) {
+      if (!notes.length) return 'Desconhecida';
+      const noteCounts = {};
+      notes.forEach(n => {
+        noteCounts[n.note] = (noteCounts[n.note] || 0) + 1;
+      });
+      const sortedNotes = Object.keys(noteCounts).sort((a, b) => noteCounts[b] - noteCounts[a]);
+      const majorKeys = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab'];
+      const minorKeys = ['A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#', 'D', 'G', 'C', 'F'];
+      return sortedNotes[0] + ' maior ou ' + minorKeys[majorKeys.indexOf(sortedNotes[0])] + ' menor';
+    }
+
+    // Iniciar gravação e análise
+    async function startRecording() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        analyser.fftSize = 2048;
+        pitchDetector = Pitchy.PitchDetector.forFloat32Array(analyser.fftSize);
+        notes = [];
+
+        recordBtn.disabled = true;
+        stopBtn.disabled = false;
+        output.textContent = 'Gravando... Cante ou toque!';
+
+        // Analisar áudio em tempo real
+        function analyze() {
+          const buffer = new Float32Array(analyser.fftSize);
+          analyser.getFloatTimeDomainData(buffer);
+          const [pitch, clarity] = pitchDetector.findPitch(buffer, audioContext.sampleRate);
+          if (clarity > 0.9) { // Apenas notas claras
+            const note = frequencyToNote(pitch);
+            if (note && (!notes.length || notes[notes.length - 1].note !== note.note)) {
+              notes.push(note);
+              output.textContent = `Nota atual: ${note.note}${note.octave} | Gravando...`;
+            }
+          }
+          if (!stopBtn.disabled) requestAnimationFrame(analyze);
+        }
+        analyze();
+      } catch (err) {
+        output.textContent = 'Erro ao acessar o microfone: ' + err.message;
+      }
+    }
+
+    // Parar gravação e exibir resultados
+    function stopRecording() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
+      }
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
+
+      if (notes.length) {
+        const noteSequence = notes.map(n => `${n.note}${n.octave}`).join(' -> ');
+        const key = estimateKey(notes);
+        output.innerHTML = `<strong>Sequência de notas:</strong> ${noteSequence}<br><strong>Tonalidade estimada:</strong> ${key}`;
+      } else {
+        output.textContent = 'Nenhuma nota detectada. Tente novamente!';
+      }
+    }
+
+    recordBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+  </script>
+</body>
+</html>
