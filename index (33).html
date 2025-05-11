@@ -2,107 +2,102 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analisador de Melodia</title>
-  <script src="https://cdn.jsdelivr.net/npm/pitchfinder@2.3.2/dist/pitchfinder.min.js"></script>
+  <title>Analisador de Notas Musicais</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-    button { padding: 10px 20px; margin: 10px; font-size: 16px; }
-    #output { margin-top: 20px; font-size: 18px; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background-color: #f2f2f2;
+    }
+    button {
+      font-size: 18px;
+      margin: 10px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    #results {
+      margin-top: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: inline-block;
+    }
+    h1 {
+      margin-bottom: 40px;
+    }
   </style>
 </head>
 <body>
-  <h1>Analisador de Melodia</h1>
-  <p>Cante ou toque uma melodia e veja as notas e a tonalidade!</p>
-  <button id="recordBtn">Gravar</button>
-  <button id="stopBtn" disabled>Parar</button>
-  <div id="output"></div>
+  <h1>🎵 Analisador de Cantarolado / Trecho Musical</h1>
+  <button id="start">Gravar</button>
+  <button id="stop" disabled>Parar</button>
 
+  <div id="results">
+    <p><strong>Notas Detectadas:</strong> <span id="notes">-</span></p>
+    <p><strong>Tonalidade Estimada:</strong> <span id="key">-</span></p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pitchfinder@1.3.2/dist/pitchfinder.min.js"></script>
   <script>
-    const recordBtn = document.getElementById('recordBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const output = document.getElementById('output');
-    let audioContext, analyser, stream, notes = [];
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const notesSpan = document.getElementById('notes');
+    const keySpan = document.getElementById('key');
 
-    // Mapeamento de frequências para notas musicais
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    function frequencyToNote(freq) {
-      if (freq < 20 || freq > 2000) return null; // Faixa audível
-      const noteNum = 12 * (Math.log2(freq / 440)) + 49;
-      const noteIndex = Math.round(noteNum) % 12;
-      const octave = Math.floor((noteNum + 8) / 12);
-      return { note: noteNames[noteIndex], octave };
-    }
+    let audioContext, source, processor;
+    let detectedNotes = [];
 
-    // Estimar tonalidade (simplificado)
-    function estimateKey(notes) {
-      if (!notes.length) return 'Desconhecida';
-      const noteCounts = {};
-      notes.forEach(n => {
-        noteCounts[n.note] = (noteCounts[n.note] || 0) + 1;
-      });
-      const sortedNotes = Object.keys(noteCounts).sort((a, b) => noteCounts[b] - noteCounts[a]);
-      const majorKeys = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab'];
-      const minorKeys = ['A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#', 'D', 'G', 'C', 'F'];
-      return sortedNotes[0] + ' maior ou ' + minorKeys[majorKeys.indexOf(sortedNotes[0])] + ' menor';
-    }
+    startBtn.onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // Iniciar gravação e análise
-    async function startRecording() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new AudioContext();
-        analyser = audioContext.createAnalyser();
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
-        analyser.fftSize = 2048;
-        const pitchFinder = Pitchfinder.YIN();
-        notes = [];
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      source = audioContext.createMediaStreamSource(stream);
+      processor = audioContext.createScriptProcessor(2048, 1, 1);
 
-        recordBtn.disabled = true;
-        stopBtn.disabled = false;
-        output.textContent = 'Gravando... Cante ou toque!';
+      const pitchDetector = Pitchfinder.YIN();
+      detectedNotes = [];
 
-        // Analisar áudio em tempo real
-        function analyze() {
-          const buffer = new Float32Array(analyser.fftSize);
-          analyser.getFloatTimeDomainData(buffer);
-          const pitch = pitchFinder(buffer);
-          if (pitch) {
-            const note = frequencyToNote(pitch);
-            if (note && (!notes.length || notes[notes.length - 1].note !== note.note)) {
-              notes.push(note);
-              output.textContent = `Nota atual: ${note.note}${note.octave} | Gravando...`;
-            }
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        const pitch = pitchDetector(input);
+
+        if (pitch) {
+          const midi = 69 + 12 * Math.log2(pitch / 440);
+          const note = Tonal.Midi.midiToNoteName(Math.round(midi));
+          if (!detectedNotes.length || detectedNotes[detectedNotes.length - 1] !== note) {
+            detectedNotes.push(note);
           }
-          if (!stopBtn.disabled) requestAnimationFrame(analyze);
         }
-        analyze();
-      } catch (err) {
-        output.textContent = 'Erro ao acessar o microfone: ' + err.message;
-      }
-    }
+      };
 
-    // Parar gravação e exibir resultados
-    function stopRecording() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        audioContext.close();
-      }
-      recordBtn.disabled = false;
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      notesSpan.textContent = '-';
+      keySpan.textContent = '-';
+    };
+
+    stopBtn.onclick = () => {
+      processor.disconnect();
+      source.disconnect();
+      audioContext.close();
+
+      startBtn.disabled = false;
       stopBtn.disabled = true;
 
-      if (notes.length) {
-        const noteSequence = notes.map(n => `${n.note}${n.octave}`).join(' -> ');
-        const key = estimateKey(notes);
-        output.innerHTML = `<strong>Sequência de notas:</strong> ${noteSequence}<br><strong>Tonalidade estimada:</strong> ${key}`;
-      } else {
-        output.textContent = 'Nenhuma nota detectada. Tente novamente!';
-      }
-    }
+      const cleanedNotes = detectedNotes;
+      notesSpan.textContent = cleanedNotes.join(', ');
 
-    recordBtn.addEventListener('click', startRecording);
-    stopBtn.addEventListener('click', stopRecording);
+      const pitchSet = Tonal.PitchSet.chromatic(cleanedNotes);
+      const detectedKey = Tonal.Key.detect(pitchSet)[0] || 'Indefinida';
+
+      keySpan.textContent = detectedKey;
+    };
   </script>
 </body>
 </html>
