@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gravação e Análise Musical</title>
-  <script src="https://unpkg.com/@tonaljs/tonal@4.6.4/dist/tonal.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
     button { padding: 10px 20px; margin: 10px; font-size: 16px; }
@@ -27,6 +26,22 @@
       'A#4': 466.16, 'B4': 493.88
     };
 
+    // Tabela de escalas maiores
+    const majorScales = {
+      'C4': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'],
+      'C#4': ['C#4', 'D#4', 'F4', 'F#4', 'G#4', 'A#4', 'C4'],
+      'D4': ['D4', 'E4', 'F#4', 'G4', 'A4', 'B4', 'C#4'],
+      'D#4': ['D#4', 'F4', 'G4', 'G#4', 'A#4', 'C4', 'D4'],
+      'E4': ['E4', 'F#4', 'G#4', 'A4', 'B4', 'C#4', 'D#4'],
+      'F4': ['F4', 'G4', 'A4', 'A#4', 'C4', 'D4', 'E4'],
+      'F#4': ['F#4', 'G#4', 'A#4', 'B4', 'C#4', 'D#4', 'F4'],
+      'G4': ['G4', 'A4', 'B4', 'C4', 'D4', 'E4', 'F#4'],
+      'G#4': ['G#4', 'A#4', 'C4', 'C#4', 'D#4', 'F4', 'G4'],
+      'A4': ['A4', 'B4', 'C#4', 'D4', 'E4', 'F#4', 'G#4'],
+      'A#4': ['A#4', 'C4', 'D4', 'D#4', 'F4', 'G4', 'A4'],
+      'B4': ['B4', 'C#4', 'D#4', 'E4', 'F#4', 'G#4', 'A#4']
+    };
+
     // Função para converter frequência em nota
     function frequencyToNote(frequency) {
       let closestNote = null, minDiff = Infinity;
@@ -42,12 +57,13 @@
 
     // Função para estimar tonalidade (simplificada)
     function estimateTonality(notes) {
+      if (!notes.length) return { tonic: 'Nenhuma nota detectada', scale: [] };
       const noteCounts = {};
       notes.forEach(note => {
         noteCounts[note] = (noteCounts[note] || 0) + 1;
       });
       const mostFrequent = Object.keys(noteCounts).reduce((a, b) => noteCounts[a] > noteCounts[b] ? a : b, null);
-      const scale = Tonal.Scale.get(`${mostFrequent} major`).notes;
+      const scale = majorScales[mostFrequent] || [];
       return { tonic: mostFrequent, scale };
     }
 
@@ -121,9 +137,9 @@
         const { tonic, scale } = estimateTonality(notes);
         document.getElementById('output').innerHTML = `
           <h3>Resultados da Análise</h3>
-          <p><strong>Notas Detectadas:</strong> ${notes.join(', ')}</p>
-          <p><strong>Tonalidade Estimada:</strong> ${tonic} maior</p>
-          <p><strong>Escala:</strong> ${scale.join(', ')}</p>
+          <p><strong>Notas Detectadas:</strong> ${notes.length ? notes.join(', ') : 'Nenhuma'}</p>
+          <p><strong>Tonalidade Estimada:</strong> ${tonic} ${tonic !== 'Nenhuma nota detectada' ? 'maior' : ''}</p>
+          <p><strong>Escala:</strong> ${scale.length ? scale.join(', ') : 'Nenhuma'}</p>
         `;
         notes = []; // Resetar notas para próxima gravação
       };
