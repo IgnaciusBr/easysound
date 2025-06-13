@@ -242,7 +242,7 @@
         const preferenceOptions = [
             'Gastronomia 🍳', 'Jardinagem 🌿', 'Fotografia 📷', 'Música ao Vivo 🎶', 'Dança 💃', 'Trilhas e Natureza 🌲',
             'Mindfulness 🧘‍♀️', 'Culinária Saudável 🥗', 'Vinhos & Queijos 🍷', 'Cafés Especiais ☕', 'Desenvolvimento Pessoal 📚',
-            'Filmes Clássicos 🎥', 'Séries de Época 👑', 'Teatro & Musicais 🎭', 'História da Arte 🏛️', 'Documentários 🌍',
+            'Filmes Clássicos 🎥', 'Séries de Época 👑', 'Teatro & Musicais 🎭', 'História da Arte 🏛️', 'Documentários �',
             'Astrologia ✨', 'Viagens de Aventura ✈️', 'Design de Interiores 🛋️', 'Gatos 🐾'
         ];
 
@@ -367,58 +367,43 @@
         }
         
         // --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
-        function initializeAppLogic() {
-            onAuthStateChanged(auth, async (user) => {
-                try {
-                    if (user) {
-                        currentUser = user;
-                        await seedDatabaseIfNeeded().catch(e => console.warn("Aviso: Falha ao popular o DB, pode ser normal se já existe.", e));
-                        
-                        if (currentUser.email === ADMIN_EMAIL) {
-                            isAdminFlowActive = false;
-                            await loadAdminPanel();
-                            showScreen('adminPanel');
-                            return;
-                        }
-                        
-                        // LÓGICA CORRIGIDA: Usa o UID do usuário anônimo persistido para checar o perfil.
-                        const userDocRef = doc(db, "users", user.uid);
-                        const userDocSnap = await getDoc(userDocRef);
-
-                        if (userDocSnap.exists()) {
-                            userProfile = userDocSnap.data();
-                            wifeUserId = user.uid; // Garante que o ID do admin seja o correto
-                            welcomeMessage.textContent = `Olá de novo, ${userProfile.name}!`;
-                            await loadThemes();
-                            showScreen('dashboard');
-                        } else {
-                            populatePreferenceTags();
-                            showScreen('onboarding');
-                        }
-                    } else {
-                        if (isAdminFlowActive) {
-                            showScreen('adminLogin');
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Erro fatal na inicialização:", error);
-                    showScreen('loading');
-                    document.querySelector('#loading-screen p').textContent = 'Ocorreu um erro ao carregar. :(';
-                    await showModal(`A Aura encontrou um problema para iniciar: ${error.message}. Por favor, recarregue a página ou avise o criador do app.`);
+        async function startApp() {
+            try {
+                // PRIMEIRO, garante uma autenticação anônima para poder ler o DB.
+                await setPersistence(auth, browserLocalPersistence);
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
                 }
-            });
+                currentUser = auth.currentUser;
+
+                await seedDatabaseIfNeeded().catch(e => console.warn("Aviso: Falha ao popular o DB, pode ser normal se já existe.", e));
+                
+                // LÓGICA CORRIGIDA: Verifica se *qualquer* perfil de usuário existe
+                const usersQuery = query(collection(db, "users"), limit(1));
+                const userSnapshot = await getDocs(usersQuery);
+
+                if (!userSnapshot.empty) {
+                    // Um usuário já existe, vá direto para o dashboard
+                    const userDoc = userSnapshot.docs[0];
+                    userProfile = userDoc.data();
+                    wifeUserId = userDoc.id; // Salva o ID do documento real para o painel admin
+                    welcomeMessage.textContent = `Olá de novo, ${userProfile.name}!`;
+                    await loadThemes();
+                    showScreen('dashboard');
+                } else {
+                    // Nenhum usuário existe, vá para o cadastro
+                    populatePreferenceTags();
+                    showScreen('onboarding');
+                }
+            } catch (error) {
+                console.error("Erro fatal na inicialização:", error);
+                showScreen('loading');
+                document.querySelector('#loading-screen p').textContent = 'Ocorreu um erro ao carregar. :(';
+                await showModal(`A Aura encontrou um problema para iniciar: ${error.message}. Por favor, recarregue a página ou avise o criador do app.`);
+            }
         }
-        
-        setPersistence(auth, browserLocalPersistence)
-            .then(() => {
-                initializeAppLogic();
-            })
-            .catch((error) => {
-                console.error("Erro ao configurar persistência de autenticação:", error);
-                initializeAppLogic();
-            });
+
+        startApp(); // Inicia a lógica principal da aplicação
 
         async function getPersonalizedContent(themeId, themeName) {
             currentThemeId = themeId; 
@@ -481,8 +466,8 @@
             };
 
             try {
-                // Usa o UID do usuário anônimo atual como ID do documento
-                await setDoc(doc(db, "users", currentUser.uid), profileData);
+                // Usa um ID fixo para o perfil da esposa, garantindo que seja sempre o mesmo documento
+                await setDoc(doc(db, "users", "wife-profile"), profileData);
                 userProfile = profileData;
                 welcomeMessage.textContent = `Seja bem-vinda, ${userProfile.name}!`;
                 await loadThemes();
@@ -567,8 +552,8 @@
                 window.location.reload();
             }
         }
-        document.getElementById('admin-link').addEventListener('click', (e) => { e.preventDefault(); isAdminFlowActive = true; if(auth.currentUser) signOut(auth).then(() => showScreen('adminLogin')); else showScreen('adminLogin'); });
-        document.getElementById('admin-login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('admin-email').value, document.getElementById('admin-password').value).then(() => showScreen('adminPanel')); } catch { document.getElementById('admin-login-error').textContent = "Email ou senha incorretos."; } });
+        document.getElementById('admin-link').addEventListener('click', (e) => { e.preventDefault(); isAdminFlowActive = true; signOut(auth).then(() => showScreen('adminLogin')); });
+        document.getElementById('admin-login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('admin-email').value, document.getElementById('admin-password').value); onAuthStateChanged(auth, (user) => { if(user && user.email === ADMIN_EMAIL) { loadAdminPanel(); showScreen('adminPanel'); } }); } catch { document.getElementById('admin-login-error').textContent = "Email ou senha incorretos."; } });
         
         async function loadAdminPanel() {
             const usersRef = collection(db, "users");
@@ -607,3 +592,4 @@
     </script>
 </body>
 </html>
+�
