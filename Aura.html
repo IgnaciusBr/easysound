@@ -358,7 +358,7 @@
                 const initialCategories = {
                     "moda": { name: "Moda", icon: "👗" }, "beleza": { name: "Beleza", icon: "💄" }, "bem-estar": { name: "Bem-estar", icon: "🧘‍♀️" },
                     "viagens": { name: "Viagens", icon: "✈️" }, "carreira": { name: "Carreira", icon: "💼" }, "relacionamento": { name: "Nós Dois", icon: "💕" },
-                    "hobbies": { name: "Hobbies", icon: "🎨" }, "cultura": { name: "Cultura Pop", icon: "🎬" }, "custom_request": { name: "Dica customizada", icon: "💡" }, "Noticias_Femininas": { name: "Notícias ", icon: "📰" },
+                    "hobbies": { name: "Hobbies", icon: "🎨" }, "cultura": { name: "Cultura Pop", icon: "🎬" }, "custom_request": { name: "Dica customizada", icon: "💡" }, "Linguagem": { name: "Linguagem", icon: "💬" },
                 };
                 for (const [id, data] of Object.entries(initialCategories)) {
                     await setDoc(doc(db, "categories", id), data);
