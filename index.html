@@ -1,1127 +1,609 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Piano Virtual</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f4f7fa;
-      color: #333;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-    header {
-      background: linear-gradient(135deg, #2c3e50, #34495e);
-      color: #fff;
-      padding: 15px;
-      text-align: center;
-      width: 100%;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-    header h1 {
-      font-size: 2rem;
-      font-weight: 700;
-    }
-    header i {
-      font-size: 1.8rem;
-      color: #e67e22;
-    }
-    .container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 15px;
-      max-width: 1200px;
-      margin: 0 auto;
-      width: 100%;
-      position: relative;
-    }
-    .top-controls {
-      display: flex;
-      justify-content: flex-end;
-      width: 100%;
-      max-width: 1200px;
-      padding: 10px;
-      gap: 10px;
-    }
-    .sidebar {
-      position: fixed;
-      left: 0;
-      top: 0;
-      height: 100%;
-      width: 250px;
-      background: linear-gradient(135deg, #34495e, #2c3e50);
-      transform: translateX(-250px);
-      transition: transform 0.3s ease;
-      z-index: 200;
-      padding: 20px;
-      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-      overflow-y: auto;
-    }
-    .sidebar.open {
-      transform: translateX(0);
-    }
-    .sidebar-toggle {
-      position: fixed;
-      top: 80px;
-      left: 0;
-      width: 10px;
-      height: 40px;
-      background: linear-gradient(135deg, #f76707, #e8590c);
-      color: #fff;
-      border: none;
-      border-radius: 0 5px 5px 0;
-      padding: 0;
-      cursor: pointer;
-      z-index: 201;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: left 0.3s ease, background 0.2s ease;
-    }
-    .sidebar.open + .sidebar-toggle {
-      left: 250px;
-    }
-    .sidebar-toggle:hover {
-      background: linear-gradient(135deg, #e8590c, #c0392b);
-    }
-    .sidebar-toggle i {
-      font-size: 12px;
-    }
-    .harmonic-fields {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .piano-container {
-      display: flex;
-      align-items: center;
-      position: relative;
-      margin-top: 10px;
-    }
-    .piano {
-      display: flex;
-      flex-direction: row;
-      background-color: #fff;
-      padding: 10px;
-      border-radius: 12px;
-      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-      overflow: hidden;
-    }
-    .octave-btn {
-      width: 30px;
-      height: 100%;
-      background: linear-gradient(135deg, #6c757d, #495057);
-      border: none;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s ease, transform 0.2s ease;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-      position: absolute;
-      top: 0;
-      bottom: 0;
-    }
-    .octave-btn:hover {
-      background: linear-gradient(135deg, #495057, #343a40);
-      transform: scale(1.05);
-    }
-    .octave-btn.left {
-      left: -30px;
-      border-radius: 12px 0 0 12px;
-    }
-    .octave-btn.right {
-      right: -30px;
-      border-radius: 0 12px 12px 0;
-    }
-    .key {
-      width: 40px;
-      height: 180px;
-      border: 1px solid #ccc;
-      position: relative;
-      cursor: pointer;
-      user-select: none;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: 10px;
-      font-size: 12px;
-      color: #333;
-      transition: transform 0.1s ease, background 0.2s ease;
-      box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.1);
-    }
-    .white {
-      background: linear-gradient(#fff, #e8ecef);
-      z-index: 1;
-    }
-    .black {
-      background: linear-gradient(#2d3436, #000);
-      color: #fff;
-      width: 24px;
-      height: 110px;
-      margin: 0 -12px;
-      z-index: 2;
-      font-size: 10px;
-      padding-bottom: 8px;
-    }
-    .key:active, .key.playing {
-      background: linear-gradient(#74c0fc, #4dabf7);
-      transform: scale(0.97);
-    }
-    .black.playing {
-      background: linear-gradient(#1864ab, #0a4275);
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    }
-    button:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
-    }
-    .sustain-btn {
-      background: linear-gradient(135deg, #339af0, #1e90ff);
-    }
-    .sustain-btn:hover {
-      background: linear-gradient(135deg, #228be6, #1971d2);
-    }
-    .sustain-btn.active {
-      background: linear-gradient(135deg, #2ecc71, #26ad5f);
-    }
-    .key-map-btn {
-      background: linear-gradient(135deg, #868e96, #6c757d);
-    }
-    .key-map-btn:hover {
-      background: linear-gradient(135deg, #6c757d, #495057);
-    }
-    .harmonic-field-btn {
-      background: linear-gradient(135deg, #f76707, #e8590c);
-      justify-content: center;
-    }
-    .harmonic-field-btn:hover {
-      background: linear-gradient(135deg, #e8590c, #c0392b);
-    }
-    .harmonic-field-btn.active {
-      background: linear-gradient(135deg, #c0392b, #9b1d1d);
-    }
-    .chord-btn {
-      background: linear-gradient(135deg, #20c997, #12b886);
-      padding: 8px 16px;
-      font-size: 13px;
-    }
-    .chord-btn:hover {
-      background: linear-gradient(135deg, #12b886, #099268);
-    }
-    #chords {
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 8px;
-      margin: 10px auto;
-      background-color: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      max-width: 100%;
-      width: calc(40px * 36 + 20px);
-      overflow-x: auto;
-      justify-content: center;
-    }
-    footer {
-      background: linear-gradient(135deg, #2c3e50, #34495e);
-      color: #fff;
-      padding: 12px;
-      text-align: center;
-      width: 100%;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    footer i {
-      color: #e67e22;
-    }
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 300;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.6);
-      justify-content: center;
-      align-items: center;
-    }
-    .modal-content {
-      background-color: #fff;
-      padding: 15px;
-      border-radius: 10px;
-      max-width: 500px;
-      width: 90%;
-      position: relative;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-    .modal-content h2 {
-      font-size: 1.6rem;
-      color: #2c3e50;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .close-btn {
-      position: absolute;
-      top: 10px;
-      right: 15px;
-      font-size: 24px;
-      cursor: pointer;
-      color: #333;
-      transition: color 0.2s;
-    }
-    .close-btn:hover {
-      color: #e67e22;
-    }
-    .key-map {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px;
-      margin-top: 15px;
-    }
-    .key-map div {
-      padding: 10px;
-      background-color: #f8f9fa;
-      border: 1px solid #e9ecef;
-      border-radius: 5px;
-      font-size: 13px;
-      transition: background-color 0.2s;
-    }
-    .key-map div:nth-child(odd) {
-      background-color: #e9ecef;
-    }
-    .orientation-notice {
-      display: none;
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #e67e22;
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-      z-index: 400;
-      font-size: 1rem;
-      text-align: center;
-      max-width: 90%;
-    }
-    #rotationPrompt {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: linear-gradient(135deg, #2c3e50, #34495e);
-      z-index: 9999;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      color: #fff;
-      text-align: center;
-      padding: 20px;
-    }
-    #rotationPrompt .prompt-content {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-      max-width: 90%;
-      animation: fadeIn 0.5s ease-in;
-    }
-    #rotationPrompt h2 {
-      font-size: 1.5rem;
-      margin-bottom: 15px;
-      font-weight: 500;
-    }
-    #rotationPrompt p {
-      font-size: 1rem;
-      margin-bottom: 20px;
-      line-height: 1.4;
-    }
-    #rotationPrompt .rotate-icon {
-      font-size: 3rem;
-      color: #e67e22;
-      animation: rotatePhone 2s infinite ease-in-out;
-    }
-    @keyframes rotatePhone {
-      0% { transform: rotate(0deg); }
-      25% { transform: rotate(90deg); }
-      50% { transform: rotate(90deg); }
-      75% { transform: rotate(0deg); }
-      100% { transform: rotate(0deg); }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @media (max-width: 768px) {
-      header {
-        padding: 8px;
-        gap: 6px;
-      }
-      header h1 {
-        font-size: 1.2rem;
-      }
-      header i {
-        font-size: 1rem;
-      }
-      .top-controls {
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-      button {
-        padding: 8px 16px;
-        font-size: 13px;
-      }
-      .sustain-btn, .key-map-btn {
-        padding: 8px 14px;
-        font-size: 12px;
-      }
-      .sidebar {
-        width: 200px;
-        transform: translateX(-200px);
-      }
-      .sidebar.open {
-        transform: translateX(0);
-      }
-      .sidebar.open + .sidebar-toggle {
-        left: 200px;
-      }
-      .sidebar-toggle {
-        top: 50px;
-        height: 30px;
-      }
-      .piano {
-        padding: 8px;
-      }
-      .key {
-        width: 30px;
-        height: 120px;
-        font-size: 10px;
-      }
-      .black {
-        width: 18px;
-        height: 80px;
-        margin: 0 -9px;
-        font-size: 8px;
-        padding-bottom: 6px;
-      }
-      .octave-btn {
-        width: 25px;
-        font-size: 14px;
-      }
-      .octave-btn.left {
-        left: -25px;
-      }
-      .octave-btn.right {
-        right: -25px;
-      }
-      #chords {
-        gap: 6px;
-        padding: 8px;
-        width: calc(30px * 36 + 16px);
-      }
-      .modal-content {
-        max-width: 90%;
-        padding: 10px;
-      }
-      .modal-content h2 {
-        font-size: 1.4rem;
-      }
-      .key-map div {
-        font-size: 12px;
-        padding: 8px;
-      }
-      #rotationPrompt h2 {
-        font-size: 1.3rem;
-      }
-      #rotationPrompt p {
-        font-size: 0.9rem;
-      }
-      #rotationPrompt .rotate-icon {
-        font-size: 2.5rem;
-      }
-    }
-    @media (max-width: 480px) and (orientation: landscape) {
-      header {
-        padding: 6px;
-        gap: 4px;
-      }
-      header h1 {
-        font-size: 1rem;
-      }
-      header i {
-        font-size: 0.9rem;
-      }
-      .container {
-        padding: 10px;
-      }
-      .piano {
-        margin-top: 5px;
-      }
-      .key {
-        width: 25px;
-        height: 100px;
-        font-size: 9px;
-      }
-      .black {
-        width: 15px;
-        height: 60px;
-        margin: 0 -7.5px;
-        font-size: 7px;
-        padding-bottom: 5px;
-      }
-      .octave-btn {
-        width: 20px;
-        font-size: 12px;
-      }
-      .octave-btn.left {
-        left: -20px;
-      }
-      .octave-btn.right {
-        right: -20px;
-      }
-      #chords {
-        margin: 5px auto;
-        padding: 6px;
-        width: calc(25px * 36 + 12px);
-      }
-      .chord-btn {
-        padding: 6px 12px;
-        font-size: 12px;
-      }
-      .sidebar-toggle {
-        top: 40px;
-        height: 25px;
-      }
-      .sidebar {
-        width: 180px;
-        transform: translateX(-180px);
-      }
-      .sidebar.open {
-        transform: translateX(0);
-      }
-      .sidebar.open + .sidebar-toggle {
-        left: 180px;
-      }
-    }
-    @media screen and (orientation: portrait) {
-      #rotationPrompt {
-        display: flex;
-      }
-      .container, header, footer, .sidebar, .sidebar-toggle {
-        display: none !important;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura - Seu Presente Especial</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Dancing Script para um toque romântico e Poppins para legibilidade -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* Estilos personalizados para complementar o Tailwind */
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        .font-handwriting {
+            font-family: 'Dancing Script', cursive;
+        }
+        /* Animação de fade-in para os elementos aparecerem suavemente */
+        .fade-in {
+            animation: fadeInAnimation 0.8s ease-in-out forwards;
+        }
+        @keyframes fadeInAnimation {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hidden {
+            display: none;
+        }
+        /* Estilo para as tags de preferência */
+        .preference-tag {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
 </head>
-<body>
-  <header>
-    <i class="fas fa-piano"></i>
-    <h1>Piano Virtual Interativo</h1>
-  </header>
-  <div class="sidebar" id="sidebar">
-    <h2 style="color: #fff; font-size: 1.4rem; margin-bottom: 15px;">Campos Harmônicos</h2>
-    <div class="harmonic-fields" id="harmonicFields"></div>
-  </div>
-  <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-chevron-right"></i></button>
-  <div class="container">
-    <div class="top-controls">
-      <button id="sustainBtn" class="sustain-btn"><i class="fas fa-wave-square"></i> Ativar Sustain</button>
-      <button id="keyMapBtn" class="key-map-btn"><i class="fas fa-keyboard"></i> Mapa de Teclas</button>
+<body class="bg-rose-50 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- Container Principal da Aplicação -->
+    <div id="app-container" class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+
+        <!-- TELA DE CARREGAMENTO INICIAL -->
+        <div id="loading-screen" class="p-8 text-center">
+            <div class="font-handwriting text-5xl text-red-400 mb-4">Aura</div>
+            <p class="text-gray-600">Carregando uma surpresa para você...</p>
+            <div class="mt-6">
+                <svg class="animate-spin h-8 w-8 text-red-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- TELA DE CADASTRO / ONBOARDING (Para a esposa) -->
+        <div id="onboarding-screen" class="hidden p-6 md:p-8">
+            <h1 class="font-handwriting text-5xl text-red-400 text-center mb-2">Olá, meu amor!</h1>
+            <h2 class="text-xl font-semibold text-center text-gray-700 mb-6">Eu criei a Aura para você.</h2>
+            <p class="text-center text-gray-600 mb-8">Para que ela seja sua companheira diária, preciso que você responda algumas coisinhas. Assim, tudo será pensado especialmente para você. ❤️</p>
+            
+            <form id="onboarding-form">
+                <div class="mb-4">
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Seu primeiro nome:</label>
+                    <input type="text" id="name" required class="w-full px-4 py-2 border border-rose-200 rounded-lg focus:ring-red-300 focus:border-red-300">
+                </div>
+                
+                <div class="mb-6">
+                    <label for="interests" class="block text-sm font-medium text-gray-700 mb-1">O que te faz sorrir? (ex: um bom livro, um dia de sol, nossa série favorita)</label>
+                    <textarea id="interests" rows="2" required class="w-full px-4 py-2 border border-rose-200 rounded-lg focus:ring-red-300 focus:border-red-300"></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Quais destes assuntos mais te interessam?</label>
+                    <div id="preferences-container" class="flex flex-wrap gap-2">
+                        <!-- Tags serão inseridas aqui pelo JS -->
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-red-400 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-500 transition-colors duration-300 shadow-md mt-8">
+                    Começar minha jornada com a Aura
+                </button>
+            </form>
+        </div>
+
+        <!-- TELA PRINCIPAL / DASHBOARD (Para a esposa) -->
+        <div id="dashboard-screen" class="hidden p-6 md:p-8">
+            <h1 id="welcome-message" class="text-3xl font-bold text-center text-gray-800 mb-2"></h1>
+            <p class="text-center text-gray-600 mb-8">Sobre o que você quer uma dica hoje?</p>
+
+            <div id="theme-selection" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+                <!-- Os botões de tema serão inseridos aqui pelo JavaScript -->
+            </div>
+
+            <div id="content-display" class="hidden bg-rose-50 p-6 rounded-xl shadow-inner space-y-4">
+                <div id="tip-card" class="hidden">
+                    <h3 class="font-bold text-lg text-red-500 mb-2">Dica do dia ✨</h3>
+                    <p id="tip-content" class="text-gray-700"></p>
+                </div>
+                <div id="affection-card" class="hidden bg-white p-4 rounded-lg shadow-sm">
+                    <p id="affection-content" class="text-center text-red-400 font-handwriting text-2xl"></p>
+                </div>
+                 <div id="motivation-card" class="hidden">
+                    <p id="motivation-content" class="text-center text-sm text-gray-500 italic"></p>
+                </div>
+
+                <!-- Botões de Ação e Mini-Chat -->
+                <div id="interaction-zone" class="hidden pt-4 space-y-4">
+                    <button id="regenerate-btn" class="w-full text-sm text-center text-red-500 hover:text-red-700 font-semibold">Gerar outra dica</button>
+                    
+                    <div id="mini-chat-section" class="pt-4 border-t border-rose-200">
+                        <form id="mini-chat-form">
+                            <label for="chat-input" class="text-sm font-medium text-gray-600">Gostou da dica? Comente aqui:</label>
+                            <div class="flex items-center gap-2 mt-2">
+                                <input type="text" id="chat-input" required class="w-full px-3 py-2 border border-rose-200 rounded-lg focus:ring-red-300 focus:border-red-300" placeholder="Sua vez de falar...">
+                                <button type="submit" class="bg-red-400 text-white p-2 rounded-lg hover:bg-red-500 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                                </button>
+                            </div>
+                        </form>
+                        <div id="chat-response-loader" class="text-center pt-4 hidden">
+                            <p class="text-sm text-gray-500">Aura está digitando...</p>
+                        </div>
+                        <div id="chat-response-card" class="mt-3 bg-white p-3 rounded-lg shadow-sm hidden">
+                           <p id="chat-response-content" class="text-gray-700 text-sm"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+             <div id="content-loader" class="text-center p-6 hidden">
+                <svg class="animate-spin h-6 w-6 text-red-400 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p>A Aura está pensando na dica perfeita...</p>
+            </div>
+        </div>
+
+        <!-- TELA DE LOGIN DO ADMINISTRADOR -->
+        <div id="admin-login-screen" class="hidden p-8">
+            <h1 class="text-2xl font-bold text-center mb-6">Área do Administrador</h1>
+             <form id="admin-login-form">
+                <div class="mb-4">
+                    <label for="admin-email" class="block text-sm font-medium text-gray-700 mb-1">Email:</label>
+                    <input type="email" id="admin-email" value="ig.rodriguesh@gmail.com" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-red-300 focus:border-red-300">
+                </div>
+                <div class="mb-6">
+                    <label for="admin-password" class="block text-sm font-medium text-gray-700 mb-1">Senha:</label>
+                    <input type="password" id="admin-password" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-red-300 focus:border-red-300">
+                </div>
+                <button type="submit" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors duration-300">Entrar</button>
+            </form>
+            <p id="admin-login-error" class="text-red-500 text-sm text-center mt-4"></p>
+            <button id="back-to-app-btn" class="w-full mt-4 text-center text-sm text-gray-500 hover:text-red-400">Voltar para a Aura</button>
+        </div>
+        
+        <!-- PAINEL DO ADMINISTRADOR -->
+        <div id="admin-panel-screen" class="hidden p-8">
+             <div class="flex justify-between items-center mb-6">
+                 <h1 class="text-2xl font-bold">Painel de Controle</h1>
+                 <button id="admin-logout-btn" class="text-sm text-gray-500 hover:text-red-400">Sair</button>
+            </div>
+             <div id="user-profile-view" class="bg-gray-100 p-4 rounded-lg mb-6">
+                 <h2 class="font-bold mb-2">Perfil Cadastrado</h2>
+                 <p id="admin-view-profile-data">Nenhum perfil encontrado.</p>
+             </div>
+             <button id="reset-profile-btn" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 mb-4">Limpar Perfil para Teste</button>
+             <button id="admin-back-to-app-btn" class="w-full bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-500">Voltar para a Aura</button>
+             <p class="text-xs text-gray-500 mt-4 text-center">Obs: A gestão de categorias pode ser feita diretamente no console do Firebase Firestore.</p>
+        </div>
+
     </div>
-    <div id="chords"></div>
-    <div class="piano-container">
-      <button class="octave-btn left" id="prevOctave"><i class="fas fa-chevron-left"></i></button>
-      <div class="piano" id="piano"></div>
-      <button class="octave-btn right" id="nextOctave"><i class="fas fa-chevron-right"></i></button>
+    
+    <footer class="mt-6 text-center">
+        <a href="#" id="admin-link" class="text-sm text-gray-400 hover:text-red-400">Admin</a>
+    </footer>
+
+    <!-- Modal de Notificação -->
+    <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center transform transition-all">
+            <p id="modal-message" class="mb-6 text-gray-700 text-lg"></p>
+            <div id="modal-buttons" class="flex justify-center gap-4"></div>
+        </div>
     </div>
-  </div>
-  <footer>
-    <i class="fas fa-music"></i>
-    <p>Piano Virtual © 2025 - Desenvolvido com Tone.js</p>
-  </footer>
-  <div id="keyMapModal" class="modal">
-    <div class="modal-content">
-      <span class="close-btn">×</span>
-      <h2><i class="fas fa-keyboard"></i> Mapa de Teclas</h2>
-      <div class="key-map">
-        <div><strong>Z</strong> - C3</div>
-        <div><strong>S</strong> - C#3</div>
-        <div><strong>X</strong> - D3</div>
-        <div><strong>D</strong> - D#3</div>
-        <div><strong>C</strong> - E3</div>
-        <div><strong>V</strong> - F3</div>
-        <div><strong>G</strong> - F#3</div>
-        <div><strong>B</strong> - G3</div>
-        <div><strong>H</strong> - G#3</div>
-        <div><strong>N</strong> - A3</div>
-        <div><strong>J</strong> - A#3</div>
-        <div><strong>M</strong> - B3</div>
-        <div><strong>Q</strong> - C4</div>
-        <div><strong>2</strong> - C#4</div>
-        <div><strong>W</strong> - D4</div>
-        <div><strong>3</strong> - D#4</div>
-        <div><strong>E</strong> - E4</div>
-        <div><strong>R</strong> - F4</div>
-        <div><strong>5</strong> - F#4</div>
-        <div><strong>T</strong> - G4</div>
-        <div><strong>6</strong> - G#4</div>
-        <div><strong>Y</strong> - A4</div>
-        <div><strong>7</strong> - A#4</div>
-        <div><strong>U</strong> - B4</div>
-        <div><strong>A</strong> - Acorde 1</div>
-        <div><strong>F</strong> - Acorde 2</div>
-        <div><strong>K</strong> - Acorde 3</div>
-        <div><strong>L</strong> - Acorde 4</div>
-        <div><strong>I</strong> - Acorde 5</div>
-        <div><strong>O</strong> - Acorde 6</div>
-        <div><strong>P</strong> - Acorde 7</div>
-      </div>
+    
+    <!-- Modal para Dica Personalizada -->
+    <div id="custom-prompt-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm transform transition-all">
+            <h3 class="text-xl font-semibold text-center text-gray-700 mb-4">Dica Personalizada</h3>
+            <p class="text-center text-gray-600 mb-6">Sobre o que você gostaria de receber uma dica agora?</p>
+            <form id="custom-prompt-form">
+                <textarea id="custom-prompt-input" rows="3" required class="w-full px-4 py-2 border border-rose-200 rounded-lg focus:ring-red-300 focus:border-red-300" placeholder="Ex: como ter mais energia pela manhã..."></textarea>
+                <div class="flex justify-center gap-4 mt-6">
+                     <button type="button" id="cancel-custom-prompt" class="bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-400 transition-colors">Cancelar</button>
+                     <button type="submit" class="bg-red-400 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-500 transition-colors">Gerar Dica</button>
+                </div>
+            </form>
+        </div>
     </div>
-  </div>
-  <div id="orientationNotice" class="orientation-notice">
-    Por favor, gire seu dispositivo para o modo paisagem para melhor visualização.
-  </div>
-  <div id="rotationPrompt">
-    <div class="prompt-content">
-      <h2>Gire o Dispositivo</h2>
-      <p>Por favor, gire seu dispositivo para o modo paisagem para uma melhor experiência com o Piano Virtual.</p>
-      <i class="fas fa-mobile-alt rotate-icon"></i>
-    </div>
-  </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-  <script>
-    const sampler = new Tone.Sampler({
-      urls: {
-        "A0": "A0.mp3",
-        "C1": "C1.mp3",
-        "D#1": "Ds1.mp3",
-        "F#1": "Fs1.mp3",
-        "A1": "A1.mp3",
-        "C2": "C2.mp3",
-        "D#2": "Ds2.mp3",
-        "F#2": "Fs2.mp3",
-        "A2": "A2.mp3",
-        "C3": "C3.mp3",
-        "D#3": "Ds3.mp3",
-        "F#3": "Fs3.mp3",
-        "A3": "A3.mp3",
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-        "C5": "C5.mp3",
-        "D#5": "Ds5.mp3",
-        "F#5": "Fs5.mp3",
-        "A5": "A5.mp3",
-        "C6": "C6.mp3",
-        "D#6": "Ds6.mp3",
-        "F#6": "Fs6.mp3",
-        "A6": "A6.mp3",
-        "C7": "C7.mp3",
-        "D#7": "Ds7.mp3",
-        "F#7": "Fs7.mp3",
-        "A7": "A7.mp3",
-        "C8": "C8.mp3"
-      },
-      release: 1,
-      baseUrl: "https://tonejs.github.io/audio/salamander/"
-    }).toDestination();
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+        import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, limit } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-    const allNotes = [];
-    for (let octave = 1; octave <= 7; octave++) {
-      const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-      notes.forEach(note => allNotes.push(`${note}${octave}`));
-    }
-
-    const blackKeys = ['C#', 'D#', 'F#', 'G#', 'A#'];
-    let currentStartOctave = 3;
-    const keysPerOctave = 12;
-    const octavesToShow = 3;
-
-    function renderPiano() {
-      const piano = document.getElementById('piano');
-      piano.innerHTML = '';
-      const startIndex = (currentStartOctave - 1) * keysPerOctave;
-      const endIndex = startIndex + (octavesToShow * keysPerOctave);
-      const visibleNotes = allNotes.slice(startIndex, endIndex);
-
-      visibleNotes.forEach(note => {
-        const key = document.createElement('div');
-        key.classList.add('key');
-        const isBlack = blackKeys.some(black => note.includes(black));
-        key.classList.add(isBlack ? 'black' : 'white');
-        key.dataset.note = note;
-        key.textContent = note;
-        piano.appendChild(key);
-
-        key.addEventListener('click', async () => {
-          if (Tone.context.state !== 'running') {
-            await Tone.start();
-          }
-          const duration = sustain ? '2n' : '8n';
-          sampler.triggerAttackRelease(note, duration);
-          highlightKey(key);
-        });
-
-        key.addEventListener('touchstart', async (e) => {
-          e.preventDefault();
-          if (Tone.context.state !== 'running') {
-            await Tone.start();
-          }
-          const duration = sustain ? '2n' : '8n';
-          sampler.triggerAttackRelease(note, duration);
-          highlightKey(key);
-        }, { passive: false });
-      });
-
-      if (activeField) {
-        updateChords(activeField);
-      }
-    }
-
-    document.getElementById('prevOctave').addEventListener('click', () => {
-      if (currentStartOctave > 1) {
-        currentStartOctave--;
-        renderPiano();
-      }
-    });
-
-    document.getElementById('nextOctave').addEventListener('click', () => {
-      if (currentStartOctave < 5) {
-        currentStartOctave++;
-        renderPiano();
-      }
-    });
-
-    document.getElementById('prevOctave').addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (currentStartOctave > 1) {
-        currentStartOctave--;
-        renderPiano();
-      }
-    }, { passive: false });
-
-    document.getElementById('nextOctave').addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (currentStartOctave < 5) {
-        currentStartOctave++;
-        renderPiano();
-      }
-    }, { passive: false });
-
-    let sustain = false;
-    const sustainBtn = document.getElementById('sustainBtn');
-    sustainBtn.addEventListener('click', () => {
-      sustain = !sustain;
-      sustainBtn.innerHTML = sustain 
-        ? '<i class="fas fa-wave-square"></i> Desativar Sustain' 
-        : '<i class="fas fa-wave-square"></i> Ativar Sustain';
-      sustainBtn.classList.toggle('active', sustain);
-      if (!sustain) {
-        sustainedNotes.forEach(note => sampler.triggerRelease(note));
-        sustainedNotes = [];
-      }
-    });
-
-    sustainBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      sustain = !sustain;
-      sustainBtn.innerHTML = sustain 
-        ? '<i class="fas fa-wave-square"></i> Desativar Sustain' 
-        : '<i class="fas fa-wave-square"></i> Ativar Sustain';
-      sustainBtn.classList.toggle('active', sustain);
-      if (!sustain) {
-        sustainedNotes.forEach(note => sampler.triggerRelease(note));
-        sustainedNotes = [];
-      }
-    }, { passive: false });
-
-    function highlightKey(key) {
-      key.classList.add('playing');
-      setTimeout(() => key.classList.remove('playing'), 200);
-    }
-
-    const keyToNote = {
-      'z': 'C3', 's': 'C#3', 'x': 'D3', 'd': 'D#3', 'c': 'E3', 'v': 'F3', 'g': 'F#3', 'b': 'G3', 'h': 'G#3', 'n': 'A3', 'j': 'A#3', 'm': 'B3',
-      'q': 'C4', '2': 'C#4', 'w': 'D4', '3': 'D#4', 'e': 'E4', 'r': 'F4', '5': 'F#4', 't': 'G4', '6': 'G#4', 'y': 'A4', '7': 'A#4', 'u': 'B4'
-    };
-
-    const chordKeyToIndex = {
-      'a': 0, // Acorde 1
-      'f': 1, // Acorde 2
-      'k': 2, // Acorde 3
-      'l': 3, // Acorde 4
-      'i': 4, // Acorde 5
-      'o': 5, // Acorde 6
-      'p': 6  // Acorde 7
-    };
-
-    let pressedKeys = new Set();
-    let sustainedNotes = [];
-    let chordButtons = [];
-
-    document.addEventListener('keydown', async (event) => {
-      const key = event.key.toLowerCase();
-
-      if (keyToNote[key] && !pressedKeys.has(key)) {
-        pressedKeys.add(key);
-        const note = keyToNote[key];
-        if (Tone.context.state !== 'running') {
-          await Tone.start();
-        }
-        sampler.triggerAttack(note);
-        if (sustain) {
-          sustainedNotes.push(note);
-        }
-        const keyElement = document.querySelector(`.key[data-note="${note}"]`);
-        if (keyElement) highlightKey(keyElement);
-      }
-
-      if (chordKeyToIndex[key] !== undefined && !pressedKeys.has(key) && activeField) {
-        pressedKeys.add(key);
-        const chordIndex = chordKeyToIndex[key];
-        if (chordButtons[chordIndex]) {
-          const chord = chordButtons[chordIndex].textContent.replace(/^\s*<i[^>]*><\/i>\s*/, '').trim();
-          const notes = harmonicFields[activeField].notes[chord];
-          if (notes) {
-            if (Tone.context.state !== 'running') {
-              await Tone.start();
-            }
-            const duration = sustain ? '2n' : '8n';
-            sampler.triggerAttackRelease(notes, duration);
-            notes.forEach(note => {
-              const key = document.querySelector(`.key[data-note="${note}"]`);
-              if (key) highlightKey(key);
-            });
-          }
-        }
-      }
-    });
-
-    document.addEventListener('keyup', (event) => {
-      const key = event.key.toLowerCase();
-      if (keyToNote[key] && pressedKeys.has(key)) {
-        pressedKeys.delete(key);
-        const note = keyToNote[key];
-        if (!sustain) {
-          sampler.triggerRelease(note);
-        }
-      }
-      if (chordKeyToIndex[key] !== undefined && pressedKeys.has(key)) {
-        pressedKeys.delete(key);
-      }
-    });
-
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const majorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const minorKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-    function getMajorScale(root) {
-      const scaleIntervals = [0, 2, 4, 5, 7, 9, 11];
-      const rootIndex = chromaticNotes.indexOf(root);
-      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
-    }
-
-    function getMinorScale(root) {
-      const scaleIntervals = [0, 2, 3, 5, 7, 8, 10];
-      const rootIndex = chromaticNotes.indexOf(root);
-      return scaleIntervals.map(interval => chromaticNotes[(rootIndex + interval) % 12]);
-    }
-
-    function getChords(scale, isMinor = false) {
-      const chordTypes = isMinor
-        ? ['m', 'dim', '', 'm', 'm', '', '']
-        : ['', 'm', 'm', '', '', 'm', 'dim'];
-      const middleOctave = currentStartOctave + 1;
-      return scale.map((note, i) => {
-        const chordRoot = note;
-        const third = scale[(i + 2) % 7];
-        const fifth = scale[(i + 4) % 7];
-        const chordType = chordTypes[i];
-        const chordName = chordType === 'm' ? chordRoot + 'm' : chordType === 'dim' ? chordRoot + 'dim' : chordRoot;
-        return {
-          name: chordName,
-          notes: [chordRoot + middleOctave, third + middleOctave, fifth + middleOctave]
+        const firebaseConfig = {
+            apiKey: "AIzaSyBwt6iZ9ZtpwQMhLI5MJHJugNWSElxJT-I",
+            authDomain: "aula01-ff.firebaseapp.com",
+            projectId: "aula01-ff",
+            storageBucket: "aula01-ff.appspot.com",
+            messagingSenderId: "814234413609",
+            appId: "1:814234413609:web:96053246c4f35bc6018a38"
         };
-      });
-    }
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const ADMIN_EMAIL = "ig.rodriguesh@gmail.com";
+        
+        const screens = {
+            loading: document.getElementById('loading-screen'),
+            onboarding: document.getElementById('onboarding-screen'),
+            dashboard: document.getElementById('dashboard-screen'),
+            adminLogin: document.getElementById('admin-login-screen'),
+            adminPanel: document.getElementById('admin-panel-screen'),
+        };
+        const welcomeMessage = document.getElementById('welcome-message');
+        const themeSelection = document.getElementById('theme-selection');
+        const contentDisplay = document.getElementById('content-display');
+        const contentLoader = document.getElementById('content-loader');
 
-    const harmonicFields = {};
-    majorKeys.forEach(root => {
-      const majorScale = getMajorScale(root);
-      const majorChords = getChords(majorScale);
-      harmonicFields[`${root} Maior`] = {
-        chords: majorChords.map(chord => chord.name),
-        notes: majorChords.reduce((acc, chord) => {
-          acc[chord.name] = chord.notes;
-          return acc;
-        }, {})
-      };
-    });
+        let currentUser = null;
+        let userProfile = null;
+        let isAdminFlowActive = false;
+        let wifeUserId = null;
+        let currentThemeId, currentThemeName;
 
-    minorKeys.forEach(root => {
-      const minorScale = getMinorScale(root);
-      const minorChords = getChords(minorScale, true);
-      harmonicFields[`${root} Menor`] = {
-        chords: minorChords.map(chord => chord.name),
-        notes: minorChords.reduce((acc, chord) => {
-          acc[chord.name] = chord.notes;
-          return acc;
-        }, {})
-      };
-    });
+        const preferenceOptions = [
+            'Gastronomia 🍳', 'Jardinagem 🌿', 'Fotografia 📷', 'Música ao Vivo 🎶', 'Dança 💃', 'Trilhas e Natureza 🌲',
+            'Mindfulness 🧘‍♀️', 'Culinária Saudável 🥗', 'Vinhos & Queijos 🍷', 'Cafés Especiais ☕', 'Desenvolvimento Pessoal 📚',
+            'Filmes Clássicos 🎥', 'Séries de Época 👑', 'Teatro & Musicais 🎭', 'História da Arte 🏛️', 'Documentários 🌍',
+            'Astrologia ✨', 'Viagens de Aventura ✈️', 'Design de Interiores 🛋️', 'Gatos 🐾'
+        ];
 
-    const harmonicFieldsContainer = document.getElementById('harmonicFields');
-    const chordsContainer = document.getElementById('chords');
-    let activeField = null;
+        // --- SISTEMA DE MODAL ---
+        const modal = document.getElementById('notification-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalButtons = document.getElementById('modal-buttons');
+        const customPromptModal = document.getElementById('custom-prompt-modal');
+        let modalResolve = null;
 
-    Object.keys(harmonicFields).forEach(field => {
-      const btn = document.createElement('button');
-      btn.classList.add('harmonic-field-btn');
-      btn.textContent = field;
-      btn.addEventListener('click', () => {
-        if (activeField === field) return;
-        activeField = field;
-        document.querySelectorAll('.harmonic-field-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        updateChords(field);
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('sidebarToggle').innerHTML = '<i class="fas fa-chevron-right"></i>';
-      });
+        function showModal(message, isConfirm = false) {
+            modalMessage.textContent = message;
+            modalButtons.innerHTML = '';
+            modal.classList.remove('hidden');
+            return new Promise(resolve => {
+                modalResolve = resolve;
+                if (isConfirm) {
+                    const confirmBtn = document.createElement('button');
+                    confirmBtn.className = 'bg-red-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-600';
+                    confirmBtn.textContent = 'Confirmar';
+                    confirmBtn.onclick = () => hideModal(true);
+                    modalButtons.appendChild(confirmBtn);
 
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (activeField === field) return;
-        activeField = field;
-        document.querySelectorAll('.harmonic-field-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        updateChords(field);
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('sidebarToggle').innerHTML = '<i class="fas fa-chevron-right"></i>';
-      }, { passive: false });
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-400';
+                    cancelBtn.textContent = 'Cancelar';
+                    cancelBtn.onclick = () => hideModal(false);
+                    modalButtons.appendChild(cancelBtn);
+                } else {
+                    const okBtn = document.createElement('button');
+                    okBtn.className = 'bg-red-400 text-white font-bold py-2 px-8 rounded-lg hover:bg-red-500';
+                    okBtn.textContent = 'OK';
+                    okBtn.onclick = () => hideModal(true);
+                    modalButtons.appendChild(okBtn);
+                }
+            });
+        }
+        function hideModal(value) {
+            modal.classList.add('hidden');
+            if (modalResolve) modalResolve(value);
+        }
+        
+        // --- FUNÇÕES DE I.A. ---
+        async function generateWithAI(prompt) {
+            const apiKey = "AIzaSyCw1jlfengNSxskn9RZSp5vO18fWhcmp48"; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const payload = { 
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                ]
+            };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ error: { message: response.statusText } }));
+                throw new Error(errorBody.error?.message || 'Erro desconhecido na API.');
+            }
+            const result = await response.json();
+            if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+                return result.candidates[0].content.parts[0].text.trim();
+            }
+             if (result.candidates && result.candidates[0]?.finishReason === 'SAFETY') {
+                console.error("IA bloqueou por segurança:", result);
+                return "Minha criatividade foi bloqueada por segurança. Que tal tentarmos um tema diferente?";
+            }
+            throw new Error("Formato de resposta da IA inesperado.");
+        }
 
-      harmonicFieldsContainer.appendChild(btn);
-    });
+        // --- FUNÇÕES AUXILIARES ---
+        function showScreen(screenName) {
+            Object.values(screens).forEach(screen => screen.classList.add('hidden'));
+            if (screens[screenName]) {
+                screens[screenName].classList.remove('hidden');
+                screens[screenName].classList.add('fade-in');
+            }
+        }
 
-    function updateChords(field) {
-      const root = field.split(' ')[0];
-      const isMinor = field.includes('Menor');
-      const scale = isMinor ? getMinorScale(root) : getMajorScale(root);
-      const chords = getChords(scale, isMinor);
-      harmonicFields[field].notes = chords.reduce((acc, chord) => {
-        acc[chord.name] = chord.notes;
-        return acc;
-      }, {});
-      displayChords(field);
-    }
+        function populatePreferenceTags() {
+            const container = document.getElementById('preferences-container');
+            container.innerHTML = '';
+            preferenceOptions.forEach(pref => {
+                const tag = document.createElement('div');
+                tag.className = 'preference-tag bg-rose-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium';
+                tag.textContent = pref;
+                tag.dataset.value = pref.split(' ')[0];
+                container.appendChild(tag);
+            });
+        }
+        
+        async function loadThemes() {
+            const querySnapshot = await getDocs(collection(db, "categories"));
+            themeSelection.innerHTML = '';
+            querySnapshot.forEach((doc) => {
+                const category = doc.data();
+                const button = document.createElement('button');
+                button.className = 'bg-white p-4 rounded-lg shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 text-center';
+                button.dataset.theme = doc.id;
+                button.dataset.name = category.name;
+                button.innerHTML = `<span class="text-3xl">${category.icon || '💖'}</span><span class="block mt-2 font-semibold text-sm text-gray-700">${category.name}</span>`;
+                button.addEventListener('click', () => getPersonalizedContent(doc.id, category.name));
+                themeSelection.appendChild(button);
+            });
+        }
 
-    function displayChords(field) {
-      chordsContainer.innerHTML = '';
-      chordButtons = [];
-      const fieldData = harmonicFields[field];
-      fieldData.chords.forEach(chord => {
-        const btn = document.createElement('button');
-        btn.classList.add('chord-btn');
-        btn.innerHTML = `<i class="fas fa-music"></i> ${chord}`;
-        btn.addEventListener('click', async () => {
-          if (Tone.context.state !== 'running') {
-            await Tone.start();
-          }
-          const notes = fieldData.notes[chord];
-          const duration = sustain ? '2n' : '8n';
-          sampler.triggerAttackRelease(notes, duration);
-          notes.forEach(note => {
-            const key = document.querySelector(`.key[data-note="${note}"]`);
-            if (key) highlightKey(key);
-          });
+        async function seedDatabaseIfNeeded() {
+            const categoriesRef = collection(db, "categories");
+            const snapshot = await getDocs(categoriesRef);
+            if (snapshot.empty) {
+                console.log("Populando categorias...");
+                const initialCategories = {
+                    "moda": { name: "Moda", icon: "👗" }, "beleza": { name: "Beleza", icon: "💄" }, "bem-estar": { name: "Bem-estar", icon: "🧘‍♀️" },
+                    "viagens": { name: "Viagens", icon: "✈️" }, "carreira": { name: "Carreira", icon: "💼" }, "relacionamento": { name: "Nós Dois", icon: "💕" },
+                    "hobbies": { name: "Hobbies", icon: "🎨" }, "cultura": { name: "Cultura Pop", icon: "🎬" }, "custom_request": { name: "Dica customizada", icon: "💡" },
+                };
+                for (const [id, data] of Object.entries(initialCategories)) {
+                    await setDoc(doc(db, "categories", id), data);
+                }
+            }
+        }
+        
+        // --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
+        function initializeAppLogic() {
+            onAuthStateChanged(auth, async (user) => {
+                try {
+                    if (user) {
+                        currentUser = user;
+                        await seedDatabaseIfNeeded().catch(e => console.warn("Aviso: Falha ao popular o DB, pode ser normal se já existe.", e));
+                        
+                        if (currentUser.email === ADMIN_EMAIL) {
+                            isAdminFlowActive = false;
+                            await loadAdminPanel();
+                            showScreen('adminPanel');
+                            return;
+                        }
+                        
+                        // LÓGICA CORRIGIDA: Usa o UID do usuário anônimo persistido para checar o perfil.
+                        const userDocRef = doc(db, "users", user.uid);
+                        const userDocSnap = await getDoc(userDocRef);
+
+                        if (userDocSnap.exists()) {
+                            userProfile = userDocSnap.data();
+                            wifeUserId = user.uid; // Garante que o ID do admin seja o correto
+                            welcomeMessage.textContent = `Olá de novo, ${userProfile.name}!`;
+                            await loadThemes();
+                            showScreen('dashboard');
+                        } else {
+                            populatePreferenceTags();
+                            showScreen('onboarding');
+                        }
+                    } else {
+                        if (isAdminFlowActive) {
+                            showScreen('adminLogin');
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Erro fatal na inicialização:", error);
+                    showScreen('loading');
+                    document.querySelector('#loading-screen p').textContent = 'Ocorreu um erro ao carregar. :(';
+                    await showModal(`A Aura encontrou um problema para iniciar: ${error.message}. Por favor, recarregue a página ou avise o criador do app.`);
+                }
+            });
+        }
+        
+        setPersistence(auth, browserLocalPersistence)
+            .then(() => {
+                initializeAppLogic();
+            })
+            .catch((error) => {
+                console.error("Erro ao configurar persistência de autenticação:", error);
+                initializeAppLogic();
+            });
+
+        async function getPersonalizedContent(themeId, themeName) {
+            currentThemeId = themeId; 
+            currentThemeName = themeName; 
+
+            if (themeId === 'custom_request') {
+                customPromptModal.classList.remove('hidden');
+                return;
+            }
+
+            contentDisplay.classList.add('hidden');
+            contentLoader.classList.remove('hidden');
+            
+            document.getElementById('interaction-zone').classList.add('hidden');
+            document.getElementById('chat-response-card').classList.add('hidden');
+            
+            try {
+                const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
+                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName}. ${preferences} A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 50 palavras. Seja criativa e comece a dica diretamente.`;
+                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 15 palavras.`;
+                const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
+
+                const [tip, affection, motivation] = await Promise.all([
+                    generateWithAI(tipPrompt), generateWithAI(affectionPrompt), generateWithAI(motivationPrompt)
+                ]);
+                
+                document.getElementById('tip-content').textContent = tip;
+                document.getElementById('affection-content').textContent = affection;
+                document.getElementById('motivation-content').textContent = motivation;
+
+                ['tip-card', 'affection-card', 'motivation-card', 'interaction-zone'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+                contentDisplay.classList.remove('hidden');
+            } catch (error) {
+                console.error("Erro ao gerar conteúdo personalizado:", error);
+                await showModal("Ops! A Aura teve um probleminha para gerar sua dica. Tente novamente em alguns instantes.");
+                contentDisplay.classList.add('hidden');
+            } finally {
+                contentLoader.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('preferences-container').addEventListener('click', (e) => {
+            if (e.target.classList.contains('preference-tag')) {
+                e.target.classList.toggle('bg-red-400');
+                e.target.classList.toggle('text-white');
+                e.target.classList.toggle('bg-rose-100');
+                e.target.classList.toggle('text-red-700');
+            }
         });
 
-        btn.addEventListener('touchstart', async (e) => {
-          e.preventDefault();
-          if (Tone.context.state !== 'running') {
-            await Tone.start();
-          }
-          const notes = fieldData.notes[chord];
-          const duration = sustain ? '2n' : '8n';
-          sampler.triggerAttackRelease(notes, duration);
-          notes.forEach(note => {
-            const key = document.querySelector(`.key[data-note="${note}"]`);
-            if (key) highlightKey(key);
-          });
-        }, { passive: false });
+        document.getElementById('onboarding-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const selectedTags = document.querySelectorAll('#preferences-container .bg-red-400');
+            const checkedPreferences = Array.from(selectedTags).map(tag => tag.dataset.value);
 
-        chordsContainer.appendChild(btn);
-        chordButtons.push(btn);
-      });
-    }
+            const profileData = { 
+                name: document.getElementById('name').value, 
+                interests: document.getElementById('interests').value,
+                preferences: checkedPreferences
+            };
 
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('sidebar');
-    sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      sidebarToggle.innerHTML = sidebar.classList.contains('open') 
-        ? '<i class="fas fa-chevron-left"></i>' 
-        : '<i class="fas fa-chevron-right"></i>';
-    });
+            try {
+                // Usa o UID do usuário anônimo atual como ID do documento
+                await setDoc(doc(db, "users", currentUser.uid), profileData);
+                userProfile = profileData;
+                welcomeMessage.textContent = `Seja bem-vinda, ${userProfile.name}!`;
+                await loadThemes();
+                showScreen('dashboard');
+            } catch (error) {
+                console.error("Erro ao salvar perfil: ", error);
+                await showModal("Houve um erro ao salvar seu perfil. Por favor, tente novamente.");
+            }
+        });
+        
+        document.getElementById('regenerate-btn').addEventListener('click', () => {
+            if (currentThemeId && currentThemeName) getPersonalizedContent(currentThemeId, currentThemeName);
+        });
+        
+        document.getElementById('mini-chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const chatInput = document.getElementById('chat-input');
+            const userComment = chatInput.value;
+            if (!userComment) return;
 
-    sidebarToggle.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      sidebar.classList.toggle('open');
-      sidebarToggle.innerHTML = sidebar.classList.contains('open') 
-        ? '<i class="fas fa-chevron-left"></i>' 
-        : '<i class="fas fa-chevron-right"></i>';
-    }, { passive: false });
+            const originalTip = document.getElementById('tip-content').textContent;
+            const chatResponseLoader = document.getElementById('chat-response-loader');
+            const chatResponseCard = document.getElementById('chat-response-card');
+            
+            chatResponseCard.classList.add('hidden');
+            chatResponseLoader.classList.remove('hidden');
+            chatInput.value = '';
 
-    const keyMapBtn = document.getElementById('keyMapBtn');
-    const keyMapModal = document.getElementById('keyMapModal');
-    const closeBtn = document.querySelector('.close-btn');
+            try {
+                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 30 palavras.`;
+                const response = await generateWithAI(chatPrompt);
+                document.getElementById('chat-response-content').textContent = response;
+                chatResponseCard.classList.remove('hidden');
+            } catch (error) {
+                document.getElementById('chat-response-content').textContent = "Desculpe, não consegui pensar em uma resposta agora. 💖";
+                chatResponseCard.classList.remove('hidden');
+            } finally {
+                chatResponseLoader.classList.add('hidden');
+            }
+        });
 
-    keyMapBtn.addEventListener('click', () => {
-      keyMapModal.style.display = 'flex';
-    });
+        document.getElementById('custom-prompt-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const customText = document.getElementById('custom-prompt-input').value;
+            if(!customText) return;
+            
+            customPromptModal.classList.add('hidden');
+            contentDisplay.classList.add('hidden');
+            contentLoader.classList.remove('hidden');
+            
+            try {
+                const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
+                const customPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre "${customText}". ${preferences} A dica deve ser útil, criativa e direta, com no máximo 40 palavras. Comece com a sugestão, sem saudações.`;
+                const tip = await generateWithAI(customPrompt);
+                
+                document.getElementById('tip-content').textContent = tip;
+                ['affection-card', 'motivation-card'].forEach(id => document.getElementById(id).classList.add('hidden'));
+                document.getElementById('tip-card').classList.remove('hidden');
+                document.getElementById('interaction-zone').classList.remove('hidden');
+                contentDisplay.classList.remove('hidden');
 
-    keyMapBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      keyMapModal.style.display = 'flex';
-    }, { passive: false });
+            } catch (error) {
+                console.error("Erro ao gerar dica customizada:", error);
+                await showModal("Ops! A Aura não conseguiu pensar numa dica sobre isso agora. Tente algo diferente!");
+                contentDisplay.classList.add('hidden');
+            } finally {
+                 contentLoader.classList.add('hidden');
+                 document.getElementById('custom-prompt-input').value = '';
+            }
+        });
+        
+        document.getElementById('cancel-custom-prompt').addEventListener('click', () => {
+             customPromptModal.classList.add('hidden');
+        });
 
-    closeBtn.addEventListener('click', () => {
-      keyMapModal.style.display = 'none';
-    });
-
-    closeBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      keyMapModal.style.display = 'none';
-    }, { passive: false });
-
-    // Controle da tela de rotação
-    const rotationPrompt = document.getElementById('rotationPrompt');
-    function updateOrientation() {
-      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-      rotationPrompt.style.display = isPortrait ? 'flex' : 'none';
-      if (!isPortrait) {
-        renderPiano();
-      }
-    }
-
-    if (screen.orientation) {
-      screen.orientation.addEventListener("change", () => {
-        updateOrientation();
-        const notice = document.getElementById('orientationNotice');
-        if (screen.orientation.type.includes("portrait")) {
-          notice.style.display = 'block';
-          setTimeout(() => {
-            notice.style.display = 'none';
-          }, 3000);
-        } else {
-          notice.style.display = 'none';
+        // --- LÓGICA DO ADMINISTRADOR ---
+        const goBackToApp = () => {
+            isAdminFlowActive = false;
+            if(auth.currentUser && !auth.currentUser.isAnonymous) {
+                signOut(auth).then(() => window.location.reload());
+            } else {
+                window.location.reload();
+            }
         }
-      });
-    } else {
-      window.addEventListener("orientationchange", () => {
-        updateOrientation();
-        const notice = document.getElementById('orientationNotice');
-        if (window.orientation === 0 || window.orientation === 180) {
-          notice.style.display = 'block';
-          setTimeout(() => {
-            notice.style.display = 'none';
-          }, 3000);
-        } else {
-          notice.style.display = 'none';
+        document.getElementById('admin-link').addEventListener('click', (e) => { e.preventDefault(); isAdminFlowActive = true; if(auth.currentUser) signOut(auth).then(() => showScreen('adminLogin')); else showScreen('adminLogin'); });
+        document.getElementById('admin-login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('admin-email').value, document.getElementById('admin-password').value).then(() => showScreen('adminPanel')); } catch { document.getElementById('admin-login-error').textContent = "Email ou senha incorretos."; } });
+        
+        async function loadAdminPanel() {
+            const usersRef = collection(db, "users");
+            const querySnapshot = await getDocs(usersRef);
+            const profileDataEl = document.getElementById('admin-view-profile-data');
+            
+            if (querySnapshot.empty) {
+                 profileDataEl.textContent = "Nenhum perfil cadastrado ainda.";
+                 wifeUserId = null;
+                 return;
+            }
+            const userDoc = querySnapshot.docs[0];
+            wifeUserId = userDoc.id; 
+            const data = userDoc.data();
+            profileDataEl.innerHTML = `<strong>Nome:</strong> ${data.name}<br><strong>Interesses:</strong> ${data.interests}<br><strong>Preferências:</strong> ${data.preferences?.join(', ') || 'Nenhuma'}<br><strong>ID:</strong> <span class="text-xs">${wifeUserId}</span>`;
         }
-      });
-    }
 
-    // Inicializar orientação
-    updateOrientation();
-
-    renderPiano();
-  </script>
+        document.getElementById('admin-logout-btn').addEventListener('click', () => { isAdminFlowActive = true; signOut(auth).then(() => showScreen('adminLogin')); });
+        document.getElementById('admin-back-to-app-btn').addEventListener('click', goBackToApp);
+        document.getElementById('back-to-app-btn').addEventListener('click', goBackToApp);
+        
+        document.getElementById('reset-profile-btn').addEventListener('click', async () => {
+            if (!wifeUserId) { await showModal("Nenhum perfil para apagar."); return; }
+            const confirmed = await showModal('Tem certeza que quer apagar o perfil dela?', true);
+            if (confirmed) {
+                try {
+                    await deleteDoc(doc(db, "users", wifeUserId));
+                    await showModal("Perfil apagado com sucesso.");
+                    await loadAdminPanel(); 
+                } catch (error) {
+                    await showModal("Erro ao apagar o perfil.");
+                    console.error("Erro ao resetar perfil:", error);
+                }
+            }
+        });
+    </script>
 </body>
 </html>
