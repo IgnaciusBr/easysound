@@ -437,8 +437,8 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName}. ${preferences} A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 50 palavras. Seja criativa e comece a dica diretamente.`;
-                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 15 palavras.`;
+                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName}. ${preferences} A dica deve ser útil, e personalizada, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
+                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 20 palavras.`;
                 const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
 
                 const [tip, affection, motivation] = await Promise.all([
@@ -512,7 +512,7 @@
             chatInput.value = '';
 
             try {
-                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 30 palavras.`;
+                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 50 palavras.`;
                 const response = await generateWithAI(chatPrompt);
                 document.getElementById('chat-response-content').textContent = response;
                 chatResponseCard.classList.remove('hidden');
