@@ -288,7 +288,7 @@
         // --- FUNÇÕES DE I.A. ---
         async function generateWithAI(prompt) {
             const apiKey = "AIzaSyCw1jlfengNSxskn9RZSp5vO18fWhcmp48"; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const payload = { 
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
                 safetySettings: [
@@ -358,7 +358,7 @@
                 const initialCategories = {
                     "moda": { name: "Moda", icon: "👗" }, "beleza": { name: "Beleza", icon: "💄" }, "bem-estar": { name: "Bem-estar", icon: "🧘‍♀️" },
                     "viagens": { name: "Viagens", icon: "✈️" }, "carreira": { name: "Carreira", icon: "💼" }, "relacionamento": { name: "Nós Dois", icon: "💕" },
-                    "hobbies": { name: "Hobbies", icon: "🎨" }, "cultura": { name: "Cultura Pop", icon: "🎬" }, "custom_request": { name: "Dica customizada", icon: "💡" }, "Linguagem": { name: "Linguagem", icon: "💬" },
+                    "hobbies": { name: "Hobbies", icon: "🎨" }, "cultura": { name: "Cultura Pop", icon: "🎬" }, "custom_request": { name: "Dica customizada", icon: "💡" },
                 };
                 for (const [id, data] of Object.entries(initialCategories)) {
                     await setDoc(doc(db, "categories", id), data);
@@ -422,8 +422,8 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName} e tudo que involve o tema, de forma abrangente e inteligente. ${preferences} A dica deve ser útil pro dia-a-dia, sem clichês, bem estruturada e direcionada, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
-                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho e curta, única e poética para ${userProfile.name}. Máximo de 20 palavras.`;
+                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName}. ${preferences} A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 50 palavras. Seja criativa e comece a dica diretamente.`;
+                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 15 palavras.`;
                 const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
 
                 const [tip, affection, motivation] = await Promise.all([
@@ -497,7 +497,7 @@
             chatInput.value = '';
 
             try {
-                const chatPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma direta, gentil, relevante e criativa. Máximo de 60 palavras.`;
+                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 30 palavras.`;
                 const response = await generateWithAI(chatPrompt);
                 document.getElementById('chat-response-content').textContent = response;
                 chatResponseCard.classList.remove('hidden');
@@ -520,7 +520,7 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const customPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre "${customText}" e tudo que involve o tema, de forma abrangente e inteligente, ou responda de forma consisa se for um questionamento.  ${preferences}  A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
+                const customPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre "${customText}". ${preferences} A dica deve ser útil, criativa e direta, com no máximo 40 palavras. Comece com a sugestão, sem saudações.`;
                 const tip = await generateWithAI(customPrompt);
                 
                 document.getElementById('tip-content').textContent = tip;
