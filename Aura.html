@@ -288,7 +288,7 @@
         // --- FUNÇÕES DE I.A. ---
         async function generateWithAI(prompt) {
             const apiKey = "AIzaSyCw1jlfengNSxskn9RZSp5vO18fWhcmp48"; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
             const payload = { 
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
                 safetySettings: [
