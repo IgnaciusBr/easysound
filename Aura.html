@@ -422,7 +422,7 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName} e tudo que involve o tema, de forma abrangente e inteligente. ${preferences} A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
+                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName} e tudo que involve o tema, de forma abrangente e inteligente. ${preferences} A dica deve ser útil pro dia-a-dia, sem clichês, bem estruturada e direcionada, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
                 const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho e curta, única e poética para ${userProfile.name}. Máximo de 20 palavras.`;
                 const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
 
@@ -497,7 +497,7 @@
             chatInput.value = '';
 
             try {
-                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma direta, gentil, relevante e criativa. Máximo de 60 palavras.`;
+                const chatPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma direta, gentil, relevante e criativa. Máximo de 60 palavras.`;
                 const response = await generateWithAI(chatPrompt);
                 document.getElementById('chat-response-content').textContent = response;
                 chatResponseCard.classList.remove('hidden');
@@ -520,7 +520,7 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const customPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre "${customText}" e tudo que involve o tema, de forma abrangente e inteligente, ou responda de forma consisa se for um questionamento.  ${preferences}  A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
+                const customPrompt = `Aja como 'Aura', uma IA assistente carinhosa expert do universo feminino. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre "${customText}" e tudo que involve o tema, de forma abrangente e inteligente, ou responda de forma consisa se for um questionamento.  ${preferences}  A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 100 palavras. Seja criativa e comece a dica diretamente.`;
                 const tip = await generateWithAI(customPrompt);
                 
                 document.getElementById('tip-content').textContent = tip;
