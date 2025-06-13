@@ -422,20 +422,8 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const tipPrompt = `
-                **PERSONA:** Você é Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Sua voz é calorosa, inteligente, empoderadora e nunca clichê.
-                **CONTEXTO:** Você está falando com ${userProfile.name}, que adora "${userProfile.interests}". ${preferences} O tema de hoje é "${themeName}".
-                **TAREFA:** Crie uma dica verdadeiramente útil e inspiradora. Evite o óbvio.
-                **ESTRUTURA DA RESPOSTA (use exatamente este formato, com quebra de linha):**
-                **Dica Principal:** [Uma recomendação prática e acionável sobre o tema. Mostre expertise.]
-                
-                **O Toque da Aura:** [Uma curiosidade, um fato científico ou uma reflexão profunda que enriqueça a dica e provoque um "uau".]
-                **REGRAS:**
-                - Use aproximadamente 80-100 palavras no total.
-                - Não use saudações. Vá direto ao ponto.
-                - Fale como uma amiga especialista e confiável.
-                `;
-                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 20 palavras.`;
+                const tipPrompt = `Aja como 'Aura', uma IA assistente carinhosa. Para ${userProfile.name}, que gosta de "${userProfile.interests}", gere uma dica sobre ${themeName}. ${preferences} A dica deve ser útil, com um fato interessante ou curiosidade. Máximo de 50 palavras. Seja criativa e comece a dica diretamente.`;
+                const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 15 palavras.`;
                 const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
 
                 const [tip, affection, motivation] = await Promise.all([
@@ -509,7 +497,7 @@
             chatInput.value = '';
 
             try {
-                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 60 palavras.`;
+                const chatPrompt = `Aja como 'Aura', uma IA carinhosa. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 30 palavras.`;
                 const response = await generateWithAI(chatPrompt);
                 document.getElementById('chat-response-content').textContent = response;
                 chatResponseCard.classList.remove('hidden');
