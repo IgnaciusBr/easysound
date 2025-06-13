@@ -422,9 +422,9 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const tipPrompt = `Você é Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Inteligente, empoderadora e nunca clichê.Você está falando com ${userProfile.name}, que adora "${userProfile.interests}". ${preferences} O tema de hoje é "${themeName}".Crie uma dica verdadeiramente útil e inspiradora. Evite o óbvio. Máximo de 80 palavras. Não use saudações. Vá direto ao ponto.Fale como uma amiga especialista e confiável.`;
+                const tipPrompt = `Haja como Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Você está falando com ${userProfile.name}, que adora "${userProfile.interests}". ${preferences} O tema de hoje é "${themeName}".Crie uma dica verdadeiramente útil e inspiradora.Máximo de 100 palavras. Não use saudações.Fale como uma amiga especialista e confiável.`;
                 const affectionPrompt = `Aja como 'Aura'. Gere uma mensagem de carinho curta, única e poética para ${userProfile.name}. Máximo de 15 palavras.`;
-                const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa para ${userProfile.name}. Máximo de 15 palavras.`;
+                const motivationPrompt = `Aja como 'Aura'. Gere uma frase motivacional curta e poderosa, ou uma citação famosa para ${userProfile.name}. Máximo de 15 palavras.`;
 
                 const [tip, affection, motivation] = await Promise.all([
                     generateWithAI(tipPrompt), generateWithAI(affectionPrompt), generateWithAI(motivationPrompt)
@@ -497,7 +497,7 @@
             chatInput.value = '';
 
             try {
-                const chatPrompt = `Você é Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Inteligente, empoderadora e nunca clichê. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 60 palavras.`;
+                const chatPrompt = `Haja como Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. A dica anterior foi: "${originalTip}". O comentário de ${userProfile.name} sobre a dica foi: "${userComment}". Responda ao comentário de forma curta, gentil e relevante. Máximo de 70 palavras.`;
                 const response = await generateWithAI(chatPrompt);
                 document.getElementById('chat-response-content').textContent = response;
                 chatResponseCard.classList.remove('hidden');
@@ -520,7 +520,7 @@
             
             try {
                 const preferences = userProfile.preferences && userProfile.preferences.length > 0 ? `Ela também se interessa por ${userProfile.preferences.join(', ')}.` : '';
-                const customPrompt = `Você é Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Inteligente, empoderadora e nunca clichê.Você está falando com ${userProfile.name}, que adora "${userProfile.interests}". ${preferences} O tema de hoje é "${customText}". Crie uma dica verdadeiramente útil e inspiradora. Evite o óbvio. Máximo de 80 palavras. Não use saudações. Vá direto ao ponto.Fale como uma amiga especialista e confiável.`;
+                const customPrompt = `Haja como Aura, uma assistente pessoal e especialista em bem-estar, estilo de vida e cultura feminina. Você está falando com ${userProfile.name}, que adora "${userProfile.interests}". ${preferences} O tema de hoje é "${customText}".Crie uma dica verdadeiramente útil e inspiradora.Máximo de 100 palavras. Não use saudações.Fale como uma amiga especialista e confiável.`;
                 const tip = await generateWithAI(customPrompt);
                 
                 document.getElementById('tip-content').textContent = tip;
